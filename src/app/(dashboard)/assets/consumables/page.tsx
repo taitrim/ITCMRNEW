@@ -1,62 +1,56 @@
-import { auth } from "@/lib/auth";
+"use client";
+
+import { useSession } from "next-auth/react";
 import { redirect } from "next/navigation";
-import { prisma } from "@/lib/db";
+import { useEffect, useState } from "react";
 import { Printer } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
 
-export default async function ConsumablesPage() {
-  const session = await auth();
+type Consumable = { id: string; name: string; type: string; stock: number; alertThreshold: number; price: number | null };
+
+export default function ConsumablesPage() {
+  const { data: session } = useSession();
   if (!session?.user) redirect("/login");
 
-  const items = await prisma.consumable.findMany({
-    where: { organizationId: session.user.organizationId! },
-    include: { location: { select: { name: true } } },
-    orderBy: { name: "asc" },
-  });
+  const [items, setItems] = useState<Consumable[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/consumables").then(r => r.json()).then(d => { setItems(d); setLoading(false); }).catch(() => setLoading(false));
+  }, []);
 
   return (
-    <div className="p-6 space-y-6">
-      <div>
-        <h1 className="text-xl font-bold text-gray-900">Vật tư tiêu hao</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">Quản lý vật tư, linh kiện, cartridge</p>
+    <div className="min-h-screen bg-surface-secondary/30 pb-4">
+      <div className="px-4 pt-3 pb-2 bg-white border-b border-border">
+        <h1 className="text-base font-bold">Vật tư tiêu hao</h1>
+        <p className="text-xs text-muted-foreground">Quản lý vật tư, linh kiện</p>
       </div>
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {items.map((c) => {
+      <div className="px-4 mt-3 space-y-2.5">
+        {items.length === 0 ? <div className="flex flex-col items-center py-16 text-muted-foreground"><Printer size={48} className="text-gray-300 mb-3" /><p>Chưa có vật tư</p></div>
+        : items.map((c, i) => {
           const low = c.stock <= c.alertThreshold;
           return (
-            <Card key={c.id} className={`hover:shadow-md transition-all ${low ? "border-orange-200 ring-1 ring-orange-100" : ""}`}>
-              <CardContent className="py-4 space-y-2">
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="w-9 h-9 rounded-lg bg-orange-50 flex items-center justify-center">
-                      <Printer size={18} className="text-orange-600" />
-                    </div>
+            <div key={c.id} className={`animate-in-up bg-white rounded-xl p-4 shadow-xs border ${low ? "border-orange-200" : "border-border"}`} style={{ animationDelay: `${i * 30}ms` }}>
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-xl bg-orange-50 flex items-center justify-center"><Printer size={20} className="text-orange-600" /></div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-start justify-between gap-2">
                     <div>
-                      <h3 className="font-medium text-gray-900 text-sm">{c.name}</h3>
+                      <h3 className="font-medium text-sm text-gray-900">{c.name}</h3>
                       <Badge variant="default" size="sm" className="capitalize">{c.type}</Badge>
                     </div>
+                    {low && <Badge variant="warning" size="sm">Sắp hết</Badge>}
                   </div>
-                  {low && <Badge variant="warning" size="sm">Sắp hết</Badge>}
+                  <div className="flex items-center gap-3 text-xs mt-1">
+                    <span className="text-muted-foreground">Tồn kho:</span>
+                    <span className={`font-bold ${low ? "text-orange-600" : "text-gray-900"}`}>{c.stock}</span>
+                    <span className="text-muted-foreground">Ngưỡng: {c.alertThreshold}</span>
+                  </div>
                 </div>
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">Tồn kho</span>
-                  <span className={`font-bold ${low ? "text-orange-600" : "text-gray-900"}`}>{c.stock}</span>
-                </div>
-                <div className="flex items-center justify-between text-xs text-muted-foreground">
-                  <span>Ngưỡng: {c.alertThreshold}</span>
-                  {c.price && <span>{c.price.toLocaleString("vi-VN")}đ</span>}
-                </div>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           );
         })}
-        {items.length === 0 && (
-          <div className="col-span-full flex flex-col items-center py-16 text-muted-foreground">
-            <Printer size={40} className="mb-3 text-gray-300" />
-            <p>Chưa có vật tư</p>
-          </div>
-        )}
       </div>
     </div>
   );

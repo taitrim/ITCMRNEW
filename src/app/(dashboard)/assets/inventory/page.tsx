@@ -1,116 +1,72 @@
-import { auth } from "@/lib/auth";
-import { redirect } from "next/navigation";
-import { prisma } from "@/lib/db";
-import { Box, Code, Monitor } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Table, THead, TBody, Th, Td } from "@/components/ui/table";
+"use client";
 
-export default async function InventoryPage() {
-  const session = await auth();
+import { useSession } from "next-auth/react";
+import { redirect } from "next/navigation";
+import { useEffect, useState } from "react";
+import { Box, Code, Monitor } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
+
+type Agent = { id: string; name: string; deviceId: string; lastContact: string | null; lastIp: string | null; isActive: boolean; _count: { inventories: number } };
+
+export default function InventoryPage() {
+  const { data: session } = useSession();
   if (!session?.user) redirect("/login");
 
-  const orgId = session.user.organizationId!;
-  const agents = await prisma.agent.findMany({
-    where: { organizationId: orgId },
-    include: { _count: { select: { inventories: true } }, user: { select: { name: true } } },
-    orderBy: { lastContact: "desc" },
-  });
-  const dynamicAssets = await prisma.asset.count({ where: { organizationId: orgId, isDynamic: true } });
+  const [agents, setAgents] = useState<Agent[]>([]);
+  const [dynamicAssets, setDynamicAssets] = useState(0);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/agent/inventory/list").then(r => r.json()).then(d => { setAgents(d.agents); setDynamicAssets(d.dynamicAssets); setLoading(false); }).catch(() => setLoading(false));
+  }, []);
 
   return (
-    <div className="p-6 space-y-6">
-      <div>
-        <h1 className="text-xl font-bold text-gray-900">Inventory Agent</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">Thu thập thông tin thiết bị từ xa qua PowerShell agent</p>
+    <div className="min-h-screen bg-surface-secondary/30 pb-4">
+      <div className="px-4 pt-3 pb-2 bg-white border-b border-border">
+        <h1 className="text-base font-bold">Inventory Agent</h1>
+        <p className="text-xs text-muted-foreground">Thu thập thông tin thiết bị từ xa</p>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card>
-          <CardContent className="flex items-center gap-4 py-5">
-            <div className="w-11 h-11 rounded-xl bg-primary-50 flex items-center justify-center">
-              <Box size={22} className="text-primary" />
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Tổng Agent</p>
-              <p className="text-2xl font-bold text-gray-900">{agents.length}</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="flex items-center gap-4 py-5">
-            <div className="w-11 h-11 rounded-xl bg-emerald-50 flex items-center justify-center">
-              <Monitor size={22} className="text-emerald-600" />
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Tài sản động</p>
-              <p className="text-2xl font-bold text-gray-900">{dynamicAssets}</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="flex items-center gap-4 py-5">
-            <div className="w-11 h-11 rounded-xl bg-purple-50 flex items-center justify-center">
-              <Code size={22} className="text-purple-600" />
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Kết nối gần nhất</p>
-              <p className="text-sm font-bold text-gray-900">{agents.filter(a => a.lastContact).length || 0} agent</p>
-            </div>
-          </CardContent>
-        </Card>
+      <div className="px-4 mt-3 grid grid-cols-2 gap-2.5">
+        <Card><CardContent className="flex items-center gap-3 py-3.5">
+          <div className="w-10 h-10 rounded-xl bg-primary-50 flex items-center justify-center"><Box size={20} className="text-primary" /></div>
+          <div><p className="text-xs text-muted-foreground">Agent</p><p className="text-lg font-bold">{agents.length}</p></div>
+        </CardContent></Card>
+        <Card><CardContent className="flex items-center gap-3 py-3.5">
+          <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center"><Monitor size={20} className="text-emerald-600" /></div>
+          <div><p className="text-xs text-muted-foreground">Tài sản động</p><p className="text-lg font-bold">{dynamicAssets}</p></div>
+        </CardContent></Card>
       </div>
 
-      <Card>
-        <CardHeader><CardTitle>Danh sách Agent</CardTitle></CardHeader>
-        <CardContent className="p-0">
-          <Table>
-            <THead>
-              <tr><Th>Tên</Th><Th>Device ID</Th><Th>IP</Th><Th>Lần cuối</Th><Th>Inventory</Th><Th>Trạng thái</Th></tr>
-            </THead>
-            <TBody>
-              {agents.map((a) => (
-                <tr key={a.id} className="hover:bg-gray-50">
-                  <Td className="font-medium text-gray-900">{a.name}</Td>
-                  <Td className="text-xs font-mono text-muted-foreground">{a.deviceId}</Td>
-                  <Td className="text-xs text-muted-foreground">{a.lastIp || "-"}</Td>
-                  <Td className="text-xs text-muted-foreground">
-                    {a.lastContact ? new Date(a.lastContact).toLocaleString("vi-VN") : "Chưa kết nối"}
-                  </Td>
-                  <Td><Badge variant="primary" size="sm">{a._count.inventories}</Badge></Td>
-                  <Td><Badge variant={a.isActive ? "success" : "default"} size="sm">{a.isActive ? "Hoạt động" : "Ngừng"}</Badge></Td>
-                </tr>
-              ))}
-              {agents.length === 0 && (
-                <tr><td colSpan={6} className="text-center py-12">
-                  <div className="flex flex-col items-center text-muted-foreground">
-                    <Box size={32} className="mb-2 text-gray-300" />
-                    <p>Chưa có agent nào kết nối</p>
-                    <p className="text-xs mt-1">Chạy lệnh sau trên máy cần thu thập:</p>
-                    <pre className="text-xs mt-2 bg-gray-50 px-3 py-2 rounded-lg">pwsh agent\inventory-agent.ps1</pre>
-                  </div>
-                </td></tr>
-              )}
-            </TBody>
-          </Table>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader><CardTitle>Hướng dẫn cài đặt Agent</CardTitle></CardHeader>
-        <CardContent>
-          <div className="text-sm space-y-3">
-            <p className="text-muted-foreground">Chạy lệnh sau trên máy tính cần thu thập thông tin:</p>
-            <div className="bg-gray-900 text-green-400 rounded-lg p-4 text-sm font-mono overflow-x-auto">
-              <p># Trên máy Windows:</p>
-              <p>cd agent</p>
-              <p>.\inventory-agent.ps1 -ServerUrl "http://YOUR_SERVER:3000" -ApiKey "agent-key-demo"</p>
-              <p className="mt-2"># Hoặc cấu hình Task Scheduler chạy định kỳ:</p>
-              <p>powershell -File "C:\path\to\inventory-agent.ps1" -ServerUrl "http://SERVER:3000"</p>
+      <div className="px-4 mt-3 space-y-2.5">
+        {agents.map((a, i) => (
+          <div key={a.id} className="animate-in-up bg-white rounded-xl p-4 shadow-xs border border-border" style={{ animationDelay: `${i * 30}ms` }}>
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center"><Code size={20} className="text-gray-600" /></div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <h3 className="font-medium text-sm text-gray-900">{a.name}</h3>
+                  <Badge variant={a.isActive ? "success" : "default"} size="sm">{a.isActive ? "Hoạt động" : "Tắt"}</Badge>
+                </div>
+                <p className="text-xs text-muted-foreground font-mono mt-0.5">{a.deviceId}</p>
+                <div className="flex items-center gap-2 text-[10px] text-muted-foreground mt-1">
+                  <span>{a._count.inventories} lần</span>
+                  <span>•</span>
+                  <span>{a.lastContact ? new Date(a.lastContact).toLocaleString("vi-VN") : "Chưa kết nối"}</span>
+                </div>
+              </div>
             </div>
           </div>
-        </CardContent>
-      </Card>
+        ))}
+        {agents.length === 0 && (
+          <div className="flex flex-col items-center py-16 text-muted-foreground">
+            <Box size={48} className="text-gray-300 mb-3" />
+            <p>Chưa có agent kết nối</p>
+            <pre className="text-xs mt-2 bg-gray-100 px-3 py-2 rounded-lg">pwsh agent\inventory-agent.ps1</pre>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

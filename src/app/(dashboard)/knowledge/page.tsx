@@ -1,59 +1,73 @@
-import { auth } from "@/lib/auth";
+"use client";
+
+import { useSession } from "next-auth/react";
 import { redirect } from "next/navigation";
-import { prisma } from "@/lib/db";
+import { useEffect, useState } from "react";
 import { Search, BookOpen } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
-export default async function KnowledgePage() {
-  const session = await auth();
+type Article = { id: string; title: string; content: string; category: string | null; tags: string | null; views: number; createdAt: string };
+
+const categoryColors: Record<string, any> = { software: "primary", hardware: "warning", network: "info", general: "default" };
+
+export default function KnowledgePage() {
+  const { data: session } = useSession();
   if (!session?.user) redirect("/login");
 
-  const articles = await prisma.knowledgeBaseArticle.findMany({
-    where: { organizationId: session.user.organizationId! },
-    orderBy: { createdAt: "desc" },
+  const [articles, setArticles] = useState<Article[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [cat, setCat] = useState("");
+
+  useEffect(() => {
+    fetch("/api/knowledge").then(r => r.json()).then(d => { setArticles(d); setLoading(false); }).catch(() => setLoading(false));
+  }, []);
+
+  const filtered = articles.filter(a => {
+    if (cat && a.category !== cat) return false;
+    if (search && !a.title.toLowerCase().includes(search.toLowerCase()) && !(a.content || "").toLowerCase().includes(search.toLowerCase())) return false;
+    return true;
   });
 
-  const categoryColors: Record<string, string> = {
-    software: "primary", hardware: "warning", network: "info", general: "default",
-  };
+  const categories = [...new Set(articles.map(a => a.category).filter(Boolean))];
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold text-gray-900">Kiến thức</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">Cơ sở tri thức IT</p>
-        </div>
+    <div className="min-h-screen bg-surface-secondary/30 pb-4">
+      <div className="px-4 pt-3 pb-2 bg-white border-b border-border">
         <div className="relative">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input className="pl-9 pr-3 py-2 text-sm rounded-lg border border-border bg-white focus:outline-hidden focus:border-primary focus:ring-2 focus:ring-primary/20 w-56" placeholder="Tìm kiếm bài viết..." />
+          <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input value={search} onChange={(e) => setSearch(e.target.value)}
+            className="w-full h-10 pl-9 pr-3 text-sm rounded-full bg-gray-100 focus:outline-hidden focus:bg-white focus:ring-2 focus:ring-primary/20"
+            placeholder="Tìm kiếm bài viết..." />
         </div>
-      </div>
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {articles.map((a) => (
-          <Card key={a.id} className="hover:shadow-md transition-all duration-200">
-            <CardContent className="py-4 space-y-2">
-              <div className="flex items-start justify-between">
-                <Badge variant={(categoryColors[a.category ?? ""] || "default") as any} size="sm">{a.category}</Badge>
-                <span className="text-xs text-muted-foreground">{a.views} lượt xem</span>
-              </div>
-              <h3 className="font-medium text-gray-900 text-sm leading-snug">{a.title}</h3>
-              <p className="text-xs text-muted-foreground line-clamp-2">{a.content.slice(0, 120)}...</p>
-              <div className="flex items-center gap-2 pt-1 text-[10px] text-muted-foreground">
-                <BookOpen size={12} />
-                <span>{new Date(a.createdAt).toLocaleDateString("vi-VN")}</span>
-                {a.tags && <span>• {a.tags}</span>}
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-        {articles.length === 0 && (
-          <div className="col-span-full flex flex-col items-center py-16 text-muted-foreground">
-            <BookOpen size={40} className="mb-3 text-gray-300" />
-            <p>Chưa có bài viết nào</p>
+        {categories.length > 0 && (
+          <div className="flex gap-1.5 mt-2 overflow-x-auto no-scrollbar">
+            <button onClick={() => setCat("")}
+              className={`px-3 py-1 rounded-full text-xs whitespace-nowrap ${!cat ? "bg-primary text-white" : "bg-gray-100 text-gray-500"}`}>Tất cả</button>
+            {categories.map((c) => (
+              <button key={c} onClick={() => setCat(c!)}
+                className={`px-3 py-1 rounded-full text-xs whitespace-nowrap ${cat === c ? "bg-primary text-white" : "bg-gray-100 text-gray-500"}`}>{c}</button>
+            ))}
           </div>
         )}
+      </div>
+      <div className="px-4 mt-3 space-y-2.5">
+        {loading ? Array.from({ length: 3 }).map((_, i) => (
+          <div key={i} className="bg-white rounded-xl p-4 animate-pulse space-y-2">
+            <div className="h-4 bg-gray-200 rounded w-2/3" /><div className="h-3 bg-gray-200 rounded w-full" />
+          </div>
+        )) : filtered.length === 0 ? (
+          <div className="flex flex-col items-center py-16 text-muted-foreground"><BookOpen size={48} className="text-gray-300 mb-3" /><p>Không có bài viết</p></div>
+        ) : filtered.map((a, i) => (
+          <div key={a.id} className="animate-in-up bg-white rounded-xl p-4 shadow-xs border border-border" style={{ animationDelay: `${i * 30}ms` }}>
+            <div className="flex items-start justify-between mb-1">
+              <Badge variant={(categoryColors[a.category ?? ""] || "default") as any} size="sm">{a.category}</Badge>
+              <span className="text-[10px] text-muted-foreground">{a.views} lượt xem</span>
+            </div>
+            <h3 className="font-medium text-sm text-gray-900">{a.title}</h3>
+            <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{a.content.slice(0, 150)}...</p>
+          </div>
+        ))}
       </div>
     </div>
   );

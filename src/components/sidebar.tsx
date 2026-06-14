@@ -72,7 +72,7 @@ export function Sidebar() {
 
   return (
     <aside className={cn(
-      "flex flex-col bg-white border-r border-border transition-all duration-200",
+      "desktop-only flex flex-col bg-white border-r border-border transition-all duration-200",
       collapsed ? "w-16" : "w-64"
     )}>
       <div className="flex h-15 items-center gap-2.5 px-4 border-b border-border">

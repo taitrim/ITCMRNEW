@@ -1,63 +1,52 @@
-import { auth } from "@/lib/auth";
+"use client";
+
+import { useSession } from "next-auth/react";
 import { redirect } from "next/navigation";
-import { prisma } from "@/lib/db";
+import { useEffect, useState } from "react";
 import { KeyRound } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
 
-export default async function LicensesPage() {
-  const session = await auth();
+type License = { id: string; name: string; publisher: string | null; version: string | null; licenseType: string; maxUsers: number | null; cost: number | null; expirationDate: string | null; _count: { assignments: number } };
+
+export default function LicensesPage() {
+  const { data: session } = useSession();
   if (!session?.user) redirect("/login");
 
-  const licenses = await prisma.softwareLicense.findMany({
-    where: { organizationId: session.user.organizationId! },
-    include: { _count: { select: { assignments: true } } },
-    orderBy: { name: "asc" },
-  });
+  const [licenses, setLicenses] = useState<License[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/licenses").then(r => r.json()).then(d => { setLicenses(d); setLoading(false); }).catch(() => setLoading(false));
+  }, []);
 
   return (
-    <div className="p-6 space-y-6">
-      <div>
-        <h1 className="text-xl font-bold text-gray-900">Bản quyền phần mềm</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">Quản lý giấy phép phần mềm</p>
+    <div className="min-h-screen bg-surface-secondary/30 pb-4">
+      <div className="px-4 pt-3 pb-2 bg-white border-b border-border">
+        <h1 className="text-base font-bold">Bản quyền phần mềm</h1>
+        <p className="text-xs text-muted-foreground">Quản lý giấy phép phần mềm</p>
       </div>
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {licenses.map((l) => {
-          const expiring = l.expirationDate && new Date(l.expirationDate) < new Date(Date.now() + 90 * 86400000);
-          return (
-            <Card key={l.id} className="hover:shadow-md transition-all">
-              <CardContent className="py-4 space-y-2">
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="w-9 h-9 rounded-lg bg-purple-50 flex items-center justify-center">
-                      <KeyRound size={18} className="text-purple-600" />
-                    </div>
-                    <div>
-                      <h3 className="font-medium text-gray-900 text-sm">{l.name}</h3>
-                      <p className="text-xs text-muted-foreground">{l.publisher}{l.version ? ` v${l.version}` : ""}</p>
-                    </div>
+      <div className="px-4 mt-3 space-y-2.5">
+        {licenses.length === 0 ? <div className="flex flex-col items-center py-16 text-muted-foreground"><KeyRound size={48} className="text-gray-300 mb-3" /><p>Chưa có bản quyền</p></div>
+        : licenses.map((l, i) => (
+          <div key={l.id} className="animate-in-up bg-white rounded-xl p-4 shadow-xs border border-border" style={{ animationDelay: `${i * 30}ms` }}>
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-xl bg-purple-50 flex items-center justify-center"><KeyRound size={20} className="text-purple-600" /></div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <h3 className="font-medium text-sm text-gray-900">{l.name}</h3>
+                    <p className="text-xs text-muted-foreground">{l.publisher}{l.version ? ` v${l.version}` : ""}</p>
                   </div>
-                  <Badge variant="purple" size="sm" className="capitalize">{l.licenseType}</Badge>
+                  <Badge variant="purple" size="sm" className="capitalize flex-shrink-0">{l.licenseType}</Badge>
                 </div>
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1">
                   <span>Đã dùng: <strong>{l._count.assignments}</strong> / {l.maxUsers || "∞"}</span>
                   {l.cost && <span>• {l.cost.toLocaleString("vi-VN")}đ</span>}
                 </div>
-                {l.expirationDate && (
-                  <p className={`text-xs ${expiring ? "text-amber-600 font-medium" : "text-muted-foreground"}`}>
-                    {expiring ? "⚠ Sắp hết hạn: " : "Hết hạn: "}{new Date(l.expirationDate).toLocaleDateString("vi-VN")}
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-          );
-        })}
-        {licenses.length === 0 && (
-          <div className="col-span-full flex flex-col items-center py-16 text-muted-foreground">
-            <KeyRound size={40} className="mb-3 text-gray-300" />
-            <p>Chưa có bản quyền</p>
+              </div>
+            </div>
           </div>
-        )}
+        ))}
       </div>
     </div>
   );
