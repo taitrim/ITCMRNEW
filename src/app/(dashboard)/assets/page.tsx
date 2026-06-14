@@ -24,7 +24,7 @@ export default async function AssetsPage() {
 
   const assets = await prisma.asset.findMany({
     where: { organizationId: session.user.organizationId!, isActive: true },
-    include: { location: { select: { name: true } }, assignedTo: { select: { name: true } } },
+    include: { location: { select: { name: true } }, assignedTo: { select: { name: true } }, manufacturer: { select: { name: true } } },
     orderBy: { createdAt: "desc" },
   });
 
@@ -55,7 +55,7 @@ export default async function AssetsPage() {
                     <span>{typeIcon[a.assetType] || "📦"}</span>
                     <div>
                       <p className="font-medium">{a.name}</p>
-                      <p className="text-xs text-gray-400">{a.manufacturer} {a.model}</p>
+                      <p className="text-xs text-gray-400">{a.manufacturer?.name || ""}</p>
                     </div>
                   </div>
                 </td>

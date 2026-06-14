@@ -7,7 +7,10 @@ datasource db {
   url      = "file:./dev.db"
 }
 
-/// Multi-tenant organization
+// ============================================================
+// 1. ORGANIZATION & USERS (Entities trong GLPI)
+// ============================================================
+
 model Organization {
   id        String   @id @default(cuid())
   name      String
@@ -21,20 +24,25 @@ model Organization {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  users      User[]
-  locations  Location[]
-  assets     Asset[]
-  tickets    Ticket[]
-  problems   Problem[]
-  changes    Change[]
-  categories Category[]
-  contracts  Contract[]
-  suppliers  Supplier[]
-  kbArticles KnowledgeBaseArticle[]
-  documents  Document[]
+  users           User[]
+  locations       Location[]
+  assets          Asset[]
+  tickets         Ticket[]
+  problems        Problem[]
+  changes         Change[]
+  categories      Category[]
+  contracts       Contract[]
+  suppliers       Supplier[]
+  kbArticles      KnowledgeBaseArticle[]
+  documents       Document[]
+  agents          Agent[]
+  softwareLicenses SoftwareLicense[]
+  consumables     Consumable[]
+  budgets         Budget[]
+  manufacturers   Manufacturer[]
+  states          State[]
 }
 
-/// User with role-based access
 model User {
   id             String   @id @default(cuid())
   name           String?
@@ -45,18 +53,22 @@ model User {
   role           String   @default("user") // admin, tech, user
   avatar         String?
   organizationId String
+  locationId     String?
   isActive       Boolean  @default(true)
+  lastLogin      DateTime?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
   organization    Organization @relation(fields: [organizationId], references: [id])
+  location        Location?    @relation(fields: [locationId], references: [id])
   accounts        Account[]
   sessions        Session[]
-  assignedTickets Ticket[]    @relation("AssignedTech")
-  createdTickets  Ticket[]    @relation("CreatedBy")
+  assignedTickets Ticket[]     @relation("AssignedTech")
+  createdTickets  Ticket[]     @relation("CreatedBy")
   activities      Activity[]
   documents       Document[]
-  assignedAssets  Asset[]     @relation("AssignedAsset")
+  assignedAssets  Asset[]      @relation("AssignedAsset")
+  agent           Agent[]      @relation("AgentUser")
 }
 
 model Account {
@@ -72,9 +84,7 @@ model Account {
   scope             String?
   id_token          String?
   session_state     String?
-
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
   @@unique([provider, providerAccountId])
 }
 
@@ -90,15 +100,44 @@ model VerificationToken {
   identifier String
   token      String   @unique
   expires    DateTime
-
   @@unique([identifier, token])
 }
 
-/// Location (physical sites/buildings)
+// ============================================================
+// 2. CONFIGURATION (Dropdown values trong GLPI)
+// ============================================================
+
+model Manufacturer {
+  id             String   @id @default(cuid())
+  name           String
+  website        String?
+  phone          String?
+  organizationId String
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  assets       Asset[]
+}
+
+model State {
+  id             String   @id @default(cuid())
+  name           String
+  description    String?
+  isActive       Boolean  @default(true)
+  organizationId String
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  assets       Asset[]
+}
+
 model Location {
   id             String   @id @default(cuid())
   name           String
   address        String?
+  building       String?
+  room           String?
   city           String?
   state          String?
   postalCode     String?
@@ -111,9 +150,10 @@ model Location {
 
   organization Organization @relation(fields: [organizationId], references: [id])
   assets       Asset[]
+  users        User[]
+  consumables  Consumable[]
 }
 
-/// Category (ITIL categories for tickets/problems/changes)
 model Category {
   id             String   @id @default(cuid())
   name           String
@@ -127,56 +167,239 @@ model Category {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  parent      Category?  @relation("CategoryTree", fields: [parentId], references: [id])
-  children    Category[] @relation("CategoryTree")
+  parent       Category?    @relation("CategoryTree", fields: [parentId], references: [id])
+  children     Category[]   @relation("CategoryTree")
   organization Organization @relation(fields: [organizationId], references: [id])
-  tickets     Ticket[]
-  problems    Problem[]
-  changes     Change[]
+  tickets      Ticket[]
+  problems     Problem[]
+  changes      Change[]
 }
 
-/// Asset (generic - like glpi_computers, glpi_printers etc.)
+// ============================================================
+// 3. ASSET MANAGEMENT (Quản lý tài sản - lõi của GLPI)
+// ============================================================
+
 model Asset {
   id             String   @id @default(cuid())
   name           String
-  assetType      String
+  assetType      String   // computer, monitor, printer, network, phone, peripheral, software, other
   serialNumber   String?
   inventoryNumber String?
-  status         String   @default("in_use")
-  manufacturer   String?
-  model          String?
-  brand          String?
-  purchaseDate   DateTime?
-  warrantyEnd    DateTime?
-  warrantyInfo   String?
-  price          Float?
+  status         String   @default("in_use") // in_use, stored, repair, retired, broken
+  manufacturerId String?
+  stateId        String?
   locationId     String?
   organizationId String
   assignedToId   String?
   notes          String?
+  purchaseDate   DateTime?
+  warrantyEnd    DateTime?
+  warrantyInfo   String?
+  price          Float?
+  isActive       Boolean  @default(true)
+  isDynamic      Boolean  @default(false) // from agent
+  lastInventory  DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  manufacturer   Manufacturer?  @relation(fields: [manufacturerId], references: [id])
+  state          State?         @relation(fields: [stateId], references: [id])
+  location       Location?      @relation(fields: [locationId], references: [id])
+  organization   Organization   @relation(fields: [organizationId], references: [id])
+  assignedTo     User?          @relation("AssignedAsset", fields: [assignedToId], references: [id])
+  computerDetail    ComputerDetail?
+  printerDetail     PrinterDetail?
+  networkDetail     NetworkDetail?
+  licenseAssignments SoftwareLicenseAssignment[]
+  inventories       Inventory[]
+}
+
+model ComputerDetail {
+  id             String  @id @default(cuid())
+  assetId        String  @unique
   cpu            String?
+  cpuCores       Int?
+  cpuThreads     Int?
+  cpuFrequency   String?
   ram            String?
-  disk           String?
+  ramSize        Int?
+  disks          String?  // JSON array
   os             String?
+  osVersion      String?
+  osArchitecture String?
   ipAddress      String?
   macAddress     String?
+  hostname       String?
+  domain         String?
+  userAgent      String?  // last agent that updated
+
+  asset Asset @relation(fields: [assetId], references: [id])
+  diskVolumes  DiskVolume[]
+  networkInterfaces NetworkInterface[]
+  softwareInstalls  SoftwareInstall[]
+}
+
+model PrinterDetail {
+  id         String @id @default(cuid())
+  assetId    String @unique
+  modelName  String?
+  serial     String?
+  ipAddress  String?
+  macAddress String?
+  isNetwork  Boolean @default(true)
+  color      Boolean @default(false)
+  duplex     Boolean @default(false)
+  pagesCount Int?
+
+  asset Asset @relation(fields: [assetId], references: [id])
+}
+
+model NetworkDetail {
+  id        String @id @default(cuid())
+  assetId   String @unique
+  ipAddress String?
+  macAddress String?
+  firmware  String?
+  model     String?
+  portCount Int?
+  isManaged Boolean @default(true)
+
+  asset Asset @relation(fields: [assetId], references: [id])
+}
+
+model DiskVolume {
+  id        String @id @default(cuid())
+  detailId  String
+  mountPoint String?
+  totalSize Int?
+  usedSize  Int?
+  filesystem String?
+
+  computer ComputerDetail @relation(fields: [detailId], references: [id])
+}
+
+model NetworkInterface {
+  id        String @id @default(cuid())
+  detailId  String
+  name      String
+  macAddress String?
+  ipAddress  String?
+  gateway    String?
+  netmask    String?
+  speed      Int?
+
+  computer ComputerDetail @relation(fields: [detailId], references: [id])
+}
+
+model SoftwareInstall {
+  id        String @id @default(cuid())
+  detailId  String
+  name      String
+  version   String?
+  publisher String?
+  installDate DateTime?
+  uninstallString String?
+
+  computer ComputerDetail @relation(fields: [detailId], references: [id])
+}
+
+model SoftwareLicense {
+  id             String   @id @default(cuid())
+  name           String
+  productName    String
+  publisher      String?
+  version        String?
+  licenseKey     String?
+  licenseType    String   // oem, retail, volume, subscription
+  maxUsers       Int?
+  expirationDate DateTime?
+  cost           Float?
+  notes          String?
+  organizationId String
   isActive       Boolean  @default(true)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  location     Location?    @relation(fields: [locationId], references: [id])
-  organization Organization @relation(fields: [organizationId], references: [id])
-  assignedTo   User?        @relation("AssignedAsset", fields: [assignedToId], references: [id])
+  organization      Organization                @relation(fields: [organizationId], references: [id])
+  assignments       SoftwareLicenseAssignment[]
 }
 
-/// Ticket (Incident/Request - like glpi_tickets)
+model SoftwareLicenseAssignment {
+  id              String @id @default(cuid())
+  licenseId       String
+  assetId         String
+  assignedAt      DateTime @default(now())
+
+  license SoftwareLicense @relation(fields: [licenseId], references: [id])
+  asset   Asset           @relation(fields: [assetId], references: [id])
+
+  @@unique([licenseId, assetId])
+}
+
+model Consumable {
+  id             String  @id @default(cuid())
+  name           String
+  ref            String?
+  type           String  // cartridge, toner, paper, other
+  stock          Int     @default(0)
+  alertThreshold Int     @default(5)
+  price          Float?
+  locationId     String?
+  organizationId String
+  isActive       Boolean @default(true)
+  createdAt      DateTime @default(now())
+
+  location     Location?    @relation(fields: [locationId], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id])
+}
+
+// ============================================================
+// 4. AGENT & INVENTORY (Thu thập thông tin thiết bị từ agent)
+// ============================================================
+
+model Agent {
+  id             String   @id @default(cuid())
+  name           String
+  version        String?
+  deviceId       String   @unique
+  lastContact    DateTime?
+  lastIp         String?
+  isActive       Boolean  @default(true)
+  organizationId String
+  userId         String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  user         User?        @relation("AgentUser", fields: [userId], references: [id])
+  inventories  Inventory[]
+}
+
+model Inventory {
+  id             String   @id @default(cuid())
+  agentId        String
+  action         String   // inventory, heartbeat
+  content        String   // JSON payload từ agent
+  status         String   @default("received") // received, processed, error
+  assetId        String?
+  error          String?
+  createdAt      DateTime @default(now())
+
+  agent Agent @relation(fields: [agentId], references: [id])
+  asset Asset? @relation(fields: [assetId], references: [id])
+}
+
+// ============================================================
+// 5. ITSM - TICKET (Incident & Request)
+// ============================================================
+
 model Ticket {
   id             String   @id @default(cuid())
   title          String
   description    String?
   type           String   @default("incident") // incident, request
   status         String   @default("new") // new, assigned, in_progress, pending, resolved, closed
-  priority       String   @default("medium") // low, medium, high, urgent, critical
+  priority       String   @default("medium")
   urgency        String   @default("medium")
   impact         String   @default("medium")
   categoryId     String?
@@ -194,15 +417,43 @@ model Ticket {
   assignedTo   User?        @relation("AssignedTech", fields: [assignedToId], references: [id])
   createdBy    User         @relation("CreatedBy", fields: [createdById], references: [id])
   organization Organization @relation(fields: [organizationId], references: [id])
-  activities   Activity[]
+  followups    TicketFollowup[]
+  tasks        TicketTask[]
 }
 
-/// Problem (Root cause analysis)
+model TicketFollowup {
+  id        String   @id @default(cuid())
+  ticketId  String
+  content   String
+  isPrivate Boolean  @default(false)
+  userId    String
+  createdAt DateTime @default(now())
+
+  ticket Ticket @relation(fields: [ticketId], references: [id])
+}
+
+model TicketTask {
+  id          String   @id @default(cuid())
+  ticketId    String
+  content     String
+  state       String   @default("todo") // todo, in_progress, done
+  userId      String?
+  plannedTime Float?
+  doneAt      DateTime?
+  createdAt   DateTime @default(now())
+
+  ticket Ticket @relation(fields: [ticketId], references: [id])
+}
+
+// ============================================================
+// 6. ITSM - PROBLEM & CHANGE
+// ============================================================
+
 model Problem {
   id             String   @id @default(cuid())
   title          String
   description    String?
-  status         String   @default("new") // new, under_analysis, resolved, closed
+  status         String   @default("new")
   priority       String   @default("medium")
   categoryId     String?
   assignedToId   String?
@@ -217,13 +468,12 @@ model Problem {
   organization Organization @relation(fields: [organizationId], references: [id])
 }
 
-/// Change (Change management)
 model Change {
   id             String   @id @default(cuid())
   title          String
   description    String?
-  status         String   @default("draft") // draft, submitted, approved, in_progress, tested, deployed, closed
-  risk           String   @default("medium") // low, medium, high, critical
+  status         String   @default("draft")
+  risk           String   @default("medium")
   impact         String   @default("medium")
   categoryId     String?
   assignedToId   String?
@@ -238,13 +488,16 @@ model Change {
   organization Organization @relation(fields: [organizationId], references: [id])
 }
 
-/// Knowledge Base (like glpi_knowbaseitems)
+// ============================================================
+// 7. KNOWLEDGE BASE, DOCUMENTS & CONTRACTS
+// ============================================================
+
 model KnowledgeBaseArticle {
   id             String   @id @default(cuid())
   title          String
   content        String
-  category       String?  // networking, hardware, software, general
-  tags           String?  // comma-separated
+  category       String?
+  tags           String?
   isPublic       Boolean  @default(false)
   views          Int      @default(0)
   organizationId String
@@ -255,7 +508,6 @@ model KnowledgeBaseArticle {
   organization Organization @relation(fields: [organizationId], references: [id])
 }
 
-/// Document (file attachments - like glpi_documents)
 model Document {
   id             String   @id @default(cuid())
   name           String
@@ -270,29 +522,17 @@ model Document {
 
   organization Organization @relation(fields: [organizationId], references: [id])
   uploadedBy   User?        @relation(fields: [uploadedById], references: [id])
-  items        DocumentItem[]
 }
 
-/// Polymorphic link between documents and any entity
-model DocumentItem {
-  id         String @id @default(cuid())
-  documentId String
-  itemId     String
-  itemType   String // Ticket, Asset, Contract
-
-  document Document @relation(fields: [documentId], references: [id])
-}
-
-/// Contract (like glpi_contracts)
 model Contract {
   id             String   @id @default(cuid())
   name           String
-  contractType   String   @default("service") // service, maintenance, lease, support, license
+  contractType   String   @default("service")
   supplierId     String?
   organizationId String
   startDate      DateTime?
   endDate        DateTime?
-  renewalType    String   @default("manual") // auto, manual
+  renewalType    String   @default("manual")
   cost           Float?
   notes          String?
   isActive       Boolean  @default(true)
@@ -303,7 +543,6 @@ model Contract {
   organization Organization @relation(fields: [organizationId], references: [id])
 }
 
-/// Supplier/Vendor (like glpi_suppliers)
 model Supplier {
   id             String   @id @default(cuid())
   name           String
@@ -312,7 +551,7 @@ model Supplier {
   phone          String?
   website        String?
   address        String?
-  supplierType   String   @default("vendor") // vendor, service_provider, consultant
+  supplierType   String   @default("vendor")
   organizationId String
   isActive       Boolean  @default(true)
   createdAt      DateTime @default(now())
@@ -322,16 +561,32 @@ model Supplier {
   contracts    Contract[]
 }
 
-/// Activity Log (timeline for tickets and assets)
+model Budget {
+  id             String   @id @default(cuid())
+  name           String
+  amount         Float
+  spent          Float    @default(0)
+  year           Int
+  description    String?
+  organizationId String
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+}
+
+// ============================================================
+// 8. ACTIVITY LOG
+// ============================================================
+
 model Activity {
   id        String   @id @default(cuid())
-  type      String   // note, status_change, assignment, resolution, comment
+  type      String   // create, update, status_change, note, agent
   content   String?
+  entityType String?
+  entityId  String?
   userId    String
-  ticketId  String?
-  assetId   String?
   createdAt DateTime @default(now())
 
-  user  User    @relation(fields: [userId], references: [id])
-  ticket Ticket? @relation(fields: [ticketId], references: [id])
+  user User @relation(fields: [userId], references: [id])
 }
