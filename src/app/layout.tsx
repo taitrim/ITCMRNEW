@@ -1,16 +1,16 @@
 import type { Metadata } from "next";
-import { Providers } from "@/app/providers";
+import { Providers } from "./providers";
 import "./globals.css";
 
 export const metadata: Metadata = {
   title: "ITSM System",
-  description: "Hệ thống quản lý IT Service & Asset Management",
+  description: "GLPI-compatible IT Service Management System",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="vi" suppressHydrationWarning>
-      <body className="min-h-screen bg-gray-50 text-gray-900 antialiased">
+      <body className="min-h-screen bg-surface text-gray-900 antialiased">
         <Providers>{children}</Providers>
       </body>
     </html>

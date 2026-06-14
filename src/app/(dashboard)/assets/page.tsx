@@ -1,19 +1,18 @@
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
+import { Search, Plus } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Table, THead, TBody, Th, Td } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 
 const typeIcon: Record<string, string> = {
-  computer: "💻", monitor: "🖥️", printer: "🖨️", network: "🌐", phone: "📱", software: "💿", other: "📦",
+  computer: "💻", monitor: "🖥️", printer: "🖨️", network: "🌐", phone: "📱", software: "💿", peripheral: "🎮", other: "📦",
 };
-
-const statusBadge = (s: string) => {
-  const colors: Record<string, string> = {
-    in_use: "bg-green-100 text-green-700", stored: "bg-gray-100 text-gray-600",
-    repair: "bg-orange-100 text-orange-700", retired: "bg-red-100 text-red-700", broken: "bg-red-100 text-red-700",
-  };
-  return colors[s] || "bg-gray-100 text-gray-600";
+const statusVariant: Record<string, any> = {
+  in_use: "success", stored: "default", repair: "warning", retired: "danger", broken: "danger",
 };
-
 const statusLabel: Record<string, string> = {
   in_use: "Đang dùng", stored: "Lưu kho", repair: "Đang sửa", retired: "Đã thanh lý", broken: "Hỏng",
 };
@@ -31,51 +30,55 @@ export default async function AssetsPage() {
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Quản lý tài sản</h1>
-        <span className="text-sm text-gray-400">Tổng: {assets.length}</span>
+        <div>
+          <h1 className="text-xl font-bold text-gray-900">Quản lý tài sản</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">Toàn bộ tài sản CNTT trong hệ thống</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="relative">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input className="pl-9 pr-3 py-2 text-sm rounded-lg border border-border bg-white focus:outline-hidden focus:border-primary focus:ring-2 focus:ring-primary/20 w-56" placeholder="Tìm kiếm tài sản..." />
+          </div>
+          <Button><Plus size={16} /> Thêm tài sản</Button>
+        </div>
       </div>
 
-      <div className="rounded-xl border bg-white overflow-hidden">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b bg-gray-50">
-              <th className="text-left p-3 font-medium">Tên</th>
-              <th className="text-left p-3 font-medium">Loại</th>
-              <th className="text-left p-3 font-medium">Serial</th>
-              <th className="text-left p-3 font-medium">Vị trí</th>
-              <th className="text-left p-3 font-medium">Người dùng</th>
-              <th className="text-left p-3 font-medium">Trạng thái</th>
+      <Card>
+        <Table>
+          <THead>
+            <tr>
+              <Th>Tên</Th>
+              <Th>Loại</Th>
+              <Th>Serial</Th>
+              <Th>Hãng</Th>
+              <Th>Vị trí</Th>
+              <Th>Người dùng</Th>
+              <Th>Trạng thái</Th>
             </tr>
-          </thead>
-          <tbody>
+          </THead>
+          <TBody>
             {assets.map((a) => (
-              <tr key={a.id} className="border-b hover:bg-gray-50">
-                <td className="p-3">
+              <tr key={a.id} className="hover:bg-gray-50 transition-colors cursor-pointer" onClick={() => window.location.href = `/assets/${a.id}`}>
+                <Td>
                   <div className="flex items-center gap-2">
-                    <span>{typeIcon[a.assetType] || "📦"}</span>
-                    <div>
-                      <p className="font-medium">{a.name}</p>
-                      <p className="text-xs text-gray-400">{a.manufacturer?.name || ""}</p>
-                    </div>
+                    <span className="text-lg">{typeIcon[a.assetType] || "📦"}</span>
+                    <span className="font-medium text-gray-900">{a.name}</span>
                   </div>
-                </td>
-                <td className="p-3 capitalize">{a.assetType}</td>
-                <td className="p-3 text-gray-500">{a.serialNumber || "-"}</td>
-                <td className="p-3 text-gray-500">{a.location?.name || "-"}</td>
-                <td className="p-3 text-gray-500">{a.assignedTo?.name || "-"}</td>
-                <td className="p-3">
-                  <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${statusBadge(a.status)}`}>
-                    {statusLabel[a.status] || a.status}
-                  </span>
-                </td>
+                </Td>
+                <Td className="capitalize text-muted-foreground">{a.assetType}</Td>
+                <Td className="text-xs text-muted-foreground font-mono">{a.serialNumber || "-"}</Td>
+                <Td className="text-muted-foreground">{a.manufacturer?.name || "-"}</Td>
+                <Td className="text-muted-foreground">{a.location?.name || "-"}</Td>
+                <Td className="text-muted-foreground">{a.assignedTo?.name || "-"}</Td>
+                <Td><Badge variant={statusVariant[a.status] || "default"} size="sm">{statusLabel[a.status] || a.status}</Badge></Td>
               </tr>
             ))}
             {assets.length === 0 && (
-              <tr><td colSpan={6} className="p-6 text-center text-gray-400">Chưa có tài sản nào</td></tr>
+              <tr><td colSpan={7} className="text-center py-12 text-muted-foreground">Chưa có tài sản nào</td></tr>
             )}
-          </tbody>
-        </table>
-      </div>
+          </TBody>
+        </Table>
+      </Card>
     </div>
   );
 }

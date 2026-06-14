@@ -2,31 +2,20 @@ import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import Link from "next/link";
+import { Search, Plus } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Table, THead, TBody, Th, Td } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 
-const statusBadge = (s: string) => {
-  const colors: Record<string, string> = {
-    new: "bg-blue-100 text-blue-700", assigned: "bg-yellow-100 text-yellow-700",
-    in_progress: "bg-orange-100 text-orange-700", pending: "bg-purple-100 text-purple-700",
-    resolved: "bg-green-100 text-green-700", closed: "bg-gray-100 text-gray-500",
-  };
-  return colors[s] || "bg-gray-100 text-gray-600";
+const statusVariant: Record<string, "default" | "primary" | "warning" | "danger" | "success" | "info" | "purple"> = {
+  new: "primary", assigned: "warning", in_progress: "warning", pending: "purple", resolved: "success", closed: "default",
 };
-
-const priorityBadge = (p: string) => {
-  const colors: Record<string, string> = {
-    low: "bg-gray-100 text-gray-600", medium: "bg-blue-100 text-blue-700",
-    high: "bg-orange-100 text-orange-700", urgent: "bg-red-100 text-red-700", critical: "bg-red-100 text-red-700",
-  };
-  return colors[p] || "bg-gray-100 text-gray-600";
-};
-
 const statusLabel: Record<string, string> = {
-  new: "Mới", assigned: "Đã phân công", in_progress: "Đang xử lý",
-  pending: "Chờ", resolved: "Đã giải quyết", closed: "Đã đóng",
+  new: "Mới", assigned: "Đã phân công", in_progress: "Đang xử lý", pending: "Chờ", resolved: "Đã giải quyết", closed: "Đã đóng",
 };
-
-const priorityLabel: Record<string, string> = {
-  low: "Thấp", medium: "Trung bình", high: "Cao", urgent: "Gấp", critical: "Nguy kịch",
+const priorityVariant: Record<string, any> = {
+  low: "default", medium: "primary", high: "warning", urgent: "danger", critical: "danger",
 };
 
 export default async function TicketsPage() {
@@ -34,81 +23,67 @@ export default async function TicketsPage() {
   if (!session?.user) redirect("/login");
 
   const tickets = await prisma.ticket.findMany({
-    where: { organizationId: session.user.organizationId!, isActive: true },
-    include: {
-      assignedTo: { select: { name: true } },
-      category: { select: { name: true, color: true } },
-    },
+    where: { organizationId: session.user.organizationId! },
+    include: { assignedTo: { select: { name: true } }, category: { select: { name: true, color: true } } },
     orderBy: { createdAt: "desc" },
   });
 
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Quản lý Ticket</h1>
-        <span className="text-sm text-gray-400">Tổng: {tickets.length}</span>
+        <div>
+          <h1 className="text-xl font-bold text-gray-900">Ticket</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">Quản lý yêu cầu và sự cố IT</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="relative">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input className="pl-9 pr-3 py-2 text-sm rounded-lg border border-border bg-white focus:outline-hidden focus:border-primary focus:ring-2 focus:ring-primary/20 w-56" placeholder="Tìm kiếm ticket..." />
+          </div>
+          <Button><Plus size={16} /> Tạo ticket</Button>
+        </div>
       </div>
 
-      <div className="flex gap-2">
-        {["new", "assigned", "in_progress", "resolved", "closed"].map((s) => (
-          <span key={s} className="text-xs text-gray-500 flex items-center gap-1">
-            <span className={`inline-block w-2 h-2 rounded-full ${s === "new" ? "bg-blue-500" : s === "assigned" ? "bg-yellow-500" : s === "in_progress" ? "bg-orange-500" : s === "resolved" ? "bg-green-500" : "bg-gray-400"}`} />
-            {statusLabel[s]}: {tickets.filter((t) => t.status === s).length}
-          </span>
-        ))}
-      </div>
-
-      <div className="rounded-xl border bg-white overflow-hidden">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b bg-gray-50">
-              <th className="text-left p-3 font-medium">Tiêu đề</th>
-              <th className="text-left p-3 font-medium">Loại</th>
-              <th className="text-left p-3 font-medium">Danh mục</th>
-              <th className="text-left p-3 font-medium">Phân công</th>
-              <th className="text-left p-3 font-medium">Độ ưu tiên</th>
-              <th className="text-left p-3 font-medium">Trạng thái</th>
-              <th className="text-left p-3 font-medium">Ngày tạo</th>
+      <Card>
+        <Table>
+          <THead>
+            <tr>
+              <Th>Tiêu đề</Th>
+              <Th>Loại</Th>
+              <Th>Danh mục</Th>
+              <Th>Ưu tiên</Th>
+              <Th>Trạng thái</Th>
+              <Th>Phân công</Th>
+              <Th>Ngày tạo</Th>
             </tr>
-          </thead>
-          <tbody>
+          </THead>
+          <TBody>
             {tickets.map((t) => (
-              <tr key={t.id} className="border-b hover:bg-gray-50">
-                <td className="p-3">
-                  <p className="font-medium">{t.title}</p>
-                  {t.description && <p className="text-xs text-gray-400 truncate max-w-xs">{t.description}</p>}
-                </td>
-                <td className="p-3 capitalize">{t.type === "incident" ? "Sự cố" : "Yêu cầu"}</td>
-                <td className="p-3">
-                  {t.category && (
-                    <span className="flex items-center gap-1">
-                      <span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: t.category.color || "#ccc" }} />
+              <tr key={t.id} className="hover:bg-gray-50 transition-colors cursor-pointer" onClick={() => window.location.href = `/tickets/${t.id}`}>
+                <Td>
+                  <Link href={`/tickets/${t.id}`} className="font-medium text-gray-900 hover:text-primary">{t.title}</Link>
+                </Td>
+                <Td><Badge variant="default" size="sm">{t.type === "incident" ? "Sự cố" : "Yêu cầu"}</Badge></Td>
+                <Td className="text-muted-foreground">
+                  {t.category ? (
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full" style={{ background: t.category.color || "#ccc" }} />
                       {t.category.name}
                     </span>
-                  )}
-                </td>
-                <td className="p-3 text-gray-500">{t.assignedTo?.name || "Chưa phân công"}</td>
-                <td className="p-3">
-                  <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${priorityBadge(t.priority)}`}>
-                    {priorityLabel[t.priority] || t.priority}
-                  </span>
-                </td>
-                <td className="p-3">
-                  <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${statusBadge(t.status)}`}>
-                    {statusLabel[t.status] || t.status}
-                  </span>
-                </td>
-                <td className="p-3 text-xs text-gray-400">
-                  {new Date(t.createdAt).toLocaleDateString("vi-VN")}
-                </td>
+                  ) : "-"}
+                </Td>
+                <Td><Badge variant={priorityVariant[t.priority] || "default"} size="sm">{t.priority}</Badge></Td>
+                <Td><Badge variant={statusVariant[t.status] || "default"} size="sm">{statusLabel[t.status] || t.status}</Badge></Td>
+                <Td className="text-muted-foreground">{t.assignedTo?.name || "-"}</Td>
+                <Td className="text-xs text-muted-foreground">{new Date(t.createdAt).toLocaleDateString("vi-VN")}</Td>
               </tr>
             ))}
             {tickets.length === 0 && (
-              <tr><td colSpan={7} className="p-6 text-center text-gray-400">Chưa có ticket nào</td></tr>
+              <tr><td colSpan={7} className="text-center py-12 text-muted-foreground">Chưa có ticket nào</td></tr>
             )}
-          </tbody>
-        </table>
-      </div>
+          </TBody>
+        </Table>
+      </Card>
     </div>
   );
 }

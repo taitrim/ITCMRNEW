@@ -1,6 +1,9 @@
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
+import { MapPin, Search } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
 
 export default async function LocationsPage() {
   const session = await auth();
@@ -14,23 +17,36 @@ export default async function LocationsPage() {
 
   return (
     <div className="p-6 space-y-6">
-      <h1 className="text-2xl font-bold">Vị trí</h1>
+      <div>
+        <h1 className="text-xl font-bold text-gray-900">Vị trí</h1>
+        <p className="text-sm text-muted-foreground mt-0.5">Quản lý địa điểm và văn phòng</p>
+      </div>
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {locations.map((l) => (
-          <div key={l.id} className="rounded-xl border bg-white p-4">
-            <h3 className="font-medium">{l.name}</h3>
-            <div className="mt-2 space-y-1 text-sm text-gray-500">
-              {l.building && <p>Tòa nhà: {l.building}</p>}
-              {l.room && <p>Phòng: {l.room}</p>}
-              {l.city && <p>Thành phố: {l.city}</p>}
-              <div className="flex gap-3 mt-2 pt-2 border-t">
-                <span className="text-xs">Tài sản: {l._count.assets}</span>
-                <span className="text-xs">Người dùng: {l._count.users}</span>
+          <Card key={l.id} className="hover:shadow-md transition-all">
+            <CardContent className="py-4 space-y-2">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-lg bg-amber-50 flex items-center justify-center">
+                  <MapPin size={18} className="text-amber-600" />
+                </div>
+                <div>
+                  <h3 className="font-medium text-gray-900 text-sm">{l.name}</h3>
+                  {l.building && <p className="text-xs text-muted-foreground">{l.building}{l.room ? ` - ${l.room}` : ""}</p>}
+                </div>
               </div>
-            </div>
-          </div>
+              <div className="flex items-center gap-3 pt-1 text-xs text-muted-foreground border-t border-border">
+                <span>{l._count.assets} tài sản</span>
+                <span>{l._count.users} người dùng</span>
+              </div>
+            </CardContent>
+          </Card>
         ))}
-        {locations.length === 0 && <div className="col-span-full text-center py-12 text-gray-400">Chưa có vị trí</div>}
+        {locations.length === 0 && (
+          <div className="col-span-full flex flex-col items-center py-16 text-muted-foreground">
+            <MapPin size={40} className="mb-3 text-gray-300" />
+            <p>Chưa có vị trí nào</p>
+          </div>
+        )}
       </div>
     </div>
   );

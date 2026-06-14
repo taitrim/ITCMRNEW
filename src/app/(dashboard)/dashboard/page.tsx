@@ -1,142 +1,164 @@
-import { auth } from "@/lib/auth";
-import { redirect } from "next/navigation";
-import { prisma } from "@/lib/db";
-import Link from "next/link";
+"use client";
 
-export default async function DashboardPage() {
-  const session = await auth();
+import { useSession } from "next-auth/react";
+import { redirect } from "next/navigation";
+import { useEffect, useState } from "react";
+import {
+  Ticket, Monitor, Users, AlertCircle, TrendingUp, Clock, CheckCircle2, Plus
+} from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend
+} from "recharts";
+
+type Stats = {
+  totalTickets: number; openTickets: number; resolvedTickets: number;
+  totalAssets: number; totalUsers: number; totalArticles: number;
+  ticketsByStatus: { status: string; count: number }[];
+  assetsByType: { type: string; count: number }[];
+  recentTickets: { id: string; title: string; status: string; priority: string; assignedTo: { name: string } | null }[];
+};
+
+const statusLabel: Record<string, string> = {
+  new: "Mới", assigned: "Đã phân công", in_progress: "Đang xử lý",
+  pending: "Chờ", resolved: "Đã giải quyết", closed: "Đã đóng",
+};
+
+const priorityBadge: Record<string, string> = {
+  low: "default", medium: "primary", high: "warning", urgent: "danger", critical: "danger"
+};
+
+const STATUS_COLORS = ["#3b82f6", "#eab308", "#f97316", "#a855f7", "#22c55e", "#9ca3af"];
+const TYPE_COLORS = ["#6366f1", "#3b82f6", "#22c55e", "#f59e0b", "#ef4444", "#8b5cf6", "#14b8a6"];
+
+export default function DashboardPage() {
+  const { data: session } = useSession();
   if (!session?.user) redirect("/login");
 
-  const orgId = session.user.organizationId!;
+  const [stats, setStats] = useState<Stats | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  const [totalAssets, activeTickets, totalKb, totalContracts] = await Promise.all([
-    prisma.asset.count({ where: { organizationId: orgId, isActive: true } }),
-    prisma.ticket.count({ where: { organizationId: orgId, isActive: true, status: { not: "closed" } } }),
-    prisma.knowledgeBaseArticle.count({ where: { organizationId: orgId } }),
-    prisma.contract.count({ where: { organizationId: orgId, isActive: true } }),
-  ]);
-
-  const recentTickets = await prisma.ticket.findMany({
-    where: { organizationId: orgId },
-    orderBy: { createdAt: "desc" },
-    take: 5,
-    include: { assignedTo: { select: { name: true } }, category: { select: { name: true } } },
-  });
-
-  const ticketByStatus = await prisma.ticket.groupBy({
-    by: ["status"],
-    where: { organizationId: orgId },
-    _count: true,
-  });
-
-  const statusCounts: Record<string, number> = {};
-  ticketByStatus.forEach((s) => { statusCounts[s.status] = s._count; });
-
-  const assetByType = await prisma.asset.groupBy({
-    by: ["assetType"],
-    where: { organizationId: orgId, isActive: true },
-    _count: true,
-  });
-
-  const statusBadge = (status: string) => {
-    const colors: Record<string, string> = {
-      new: "bg-blue-100 text-blue-700",
-      assigned: "bg-yellow-100 text-yellow-700",
-      in_progress: "bg-orange-100 text-orange-700",
-      pending: "bg-purple-100 text-purple-700",
-      resolved: "bg-green-100 text-green-700",
-      closed: "bg-gray-100 text-gray-500",
-    };
-    return colors[status] || "bg-gray-100 text-gray-600";
-  };
-
-  const statusLabel = (s: string) => {
-    const labels: Record<string, string> = {
-      new: "Mới", assigned: "Đã phân công", in_progress: "Đang xử lý",
-      pending: "Chờ", resolved: "Đã giải quyết", closed: "Đã đóng",
-    };
-    return labels[s] || s;
-  };
+  useEffect(() => {
+    fetch("/api/dashboard/stats").then(r => r.json()).then(d => { setStats(d); setLoading(false); });
+  }, []);
 
   return (
     <div className="p-6 space-y-6">
-      <h1 className="text-2xl font-bold">Tổng quan</h1>
-
-      <div className="grid gap-4 md:grid-cols-4">
-        <Link href="/assets" className="rounded-xl border bg-white p-4 hover:shadow-md transition-shadow">
-          <p className="text-sm text-gray-500">Tài sản</p>
-          <p className="text-3xl font-bold text-blue-600">{totalAssets}</p>
-        </Link>
-        <Link href="/tickets" className="rounded-xl border bg-white p-4 hover:shadow-md transition-shadow">
-          <p className="text-sm text-gray-500">Ticket đang xử lý</p>
-          <p className="text-3xl font-bold text-orange-600">{activeTickets}</p>
-        </Link>
-        <Link href="/knowledge" className="rounded-xl border bg-white p-4 hover:shadow-md transition-shadow">
-          <p className="text-sm text-gray-500">Bài viết kiến thức</p>
-          <p className="text-3xl font-bold text-green-600">{totalKb}</p>
-        </Link>
-        <Link href="/contracts" className="rounded-xl border bg-white p-4 hover:shadow-md transition-shadow">
-          <p className="text-sm text-gray-500">Hợp đồng</p>
-          <p className="text-3xl font-bold text-purple-600">{totalContracts}</p>
-        </Link>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-bold text-gray-900">Dashboard</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            Chào mừng trở lại, {session.user.name}
+          </p>
+        </div>
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Clock size={14} />
+          <span>{new Date().toLocaleDateString("vi-VN", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}</span>
+        </div>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2">
-        <div className="rounded-xl border bg-white p-4">
-          <h2 className="font-semibold mb-3">Ticket theo trạng thái</h2>
-          <div className="space-y-2">
-            {["new", "assigned", "in_progress", "pending", "resolved", "closed"].map((s) => (
-              <div key={s} className="flex items-center justify-between">
-                <span className="text-sm">{statusLabel(s)}</span>
-                <div className="flex items-center gap-2">
-                  <div className="h-2 w-32 rounded-full bg-gray-100 overflow-hidden">
-                    <div className={`h-full rounded-full ${s === "new" ? "bg-blue-500" : s === "in_progress" ? "bg-orange-500" : "bg-gray-300"}`}
-                      style={{ width: `${Math.min(100, (statusCounts[s] || 0) * 20)}%` }}
-                    />
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        {[
+          { icon: Ticket, label: "Ticket đang mở", value: stats?.openTickets ?? 0, color: "text-primary", bg: "bg-primary-50" },
+          { icon: CheckCircle2, label: "Đã giải quyết", value: stats?.resolvedTickets ?? 0, color: "text-emerald-600", bg: "bg-emerald-50" },
+          { icon: Monitor, label: "Tổng tài sản", value: stats?.totalAssets ?? 0, color: "text-purple-600", bg: "bg-purple-50" },
+          { icon: Users, label: "Người dùng", value: stats?.totalUsers ?? 0, color: "text-amber-600", bg: "bg-amber-50" },
+        ].map((s) => (
+          <Card key={s.label}>
+            <CardContent className="flex items-center gap-4 py-5">
+              <div className={`w-11 h-11 rounded-xl ${s.bg} flex items-center justify-center`}>
+                <s.icon size={22} className={s.color} />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">{s.label}</p>
+                <p className="text-2xl font-bold text-gray-900">{loading ? "-" : s.value}</p>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card>
+          <CardHeader><CardTitle>Ticket theo trạng thái</CardTitle>
+            {stats && <Badge variant="primary">Tổng: {stats.totalTickets}</Badge>}
+          </CardHeader>
+          <CardContent>
+            {stats ? (
+              <ResponsiveContainer width="100%" height={280}>
+                <BarChart data={stats.ticketsByStatus}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                  <XAxis dataKey="status" tickFormatter={(v) => statusLabel[v] || v} tick={{ fontSize: 12 }} />
+                  <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
+                  <Tooltip formatter={(v: any) => [v, "Số lượng"]} labelFormatter={(v: any) => statusLabel[v] || v} />
+                  <Bar dataKey="count" radius={[6, 6, 0, 0]}>
+                    {stats.ticketsByStatus.map((_, i) => (
+                      <Cell key={i} fill={STATUS_COLORS[i % STATUS_COLORS.length]} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            ) : <div className="h-[280px] flex items-center justify-center text-muted-foreground">Đang tải...</div>}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader><CardTitle>Tài sản theo loại</CardTitle>
+            {stats && <Badge variant="primary">Tổng: {stats.totalAssets}</Badge>}
+          </CardHeader>
+          <CardContent>
+            {stats ? (
+              <ResponsiveContainer width="100%" height={280}>
+                <PieChart>
+                  <Pie data={stats.assetsByType} dataKey="count" nameKey="type" cx="50%" cy="50%" outerRadius={90} innerRadius={50}
+                    label={({ type, count }: any) => `${type}: ${count}`} labelLine={false}>
+                    {stats.assetsByType.map((_, i) => (
+                      <Cell key={i} fill={TYPE_COLORS[i % TYPE_COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                </PieChart>
+              </ResponsiveContainer>
+            ) : <div className="h-[280px] flex items-center justify-center text-muted-foreground">Đang tải...</div>}
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Ticket gần đây</CardTitle>
+          <Badge variant="primary">{stats?.recentTickets?.length || 0} mới nhất</Badge>
+        </CardHeader>
+        <CardContent className="p-0">
+          <div className="divide-y divide-border">
+            {(stats?.recentTickets ?? []).map((t) => (
+              <div key={t.id} className="flex items-center justify-between px-5 py-3 hover:bg-gray-50 transition-colors">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                    t.status === "resolved" || t.status === "closed" ? "bg-emerald-400" :
+                    t.status === "in_progress" ? "bg-orange-400" :
+                    t.status === "new" ? "bg-blue-400" : "bg-gray-400"
+                  }`} />
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-gray-900 truncate">{t.title}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {t.assignedTo?.name || "Chưa gán"}
+                    </p>
                   </div>
-                  <span className="text-sm font-medium w-6 text-right">{statusCounts[s] || 0}</span>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <Badge variant={(priorityBadge[t.priority] || "default") as any}>{t.priority}</Badge>
+                  <Badge>{statusLabel[t.status] || t.status}</Badge>
                 </div>
               </div>
             ))}
+            {(!stats?.recentTickets || stats.recentTickets.length === 0) && (
+              <div className="px-5 py-8 text-center text-sm text-muted-foreground">Chưa có ticket nào</div>
+            )}
           </div>
-        </div>
-
-        <div className="rounded-xl border bg-white p-4">
-          <h2 className="font-semibold mb-3">Tài sản theo loại</h2>
-          <div className="space-y-2">
-            {assetByType.map((a) => (
-              <div key={a.assetType} className="flex items-center justify-between">
-                <span className="text-sm capitalize">{a.assetType === "network" ? "Mạng" : a.assetType === "computer" ? "Máy tính" : a.assetType}</span>
-                <span className="text-sm font-medium">{a._count}</span>
-              </div>
-            ))}
-            {assetByType.length === 0 && <p className="text-sm text-gray-400">Chưa có tài sản</p>}
-          </div>
-        </div>
-      </div>
-
-      <div className="rounded-xl border bg-white p-4">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="font-semibold">Ticket gần đây</h2>
-          <Link href="/tickets" className="text-sm text-blue-600 hover:underline">Xem tất cả</Link>
-        </div>
-        <div className="space-y-2">
-          {recentTickets.map((t) => (
-            <div key={t.id} className="flex items-center justify-between rounded-lg border p-3">
-              <div>
-                <p className="text-sm font-medium">{t.title}</p>
-                <p className="text-xs text-gray-400">
-                  {t.category?.name} • {t.assignedTo?.name || "Chưa phân công"}
-                </p>
-              </div>
-              <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${statusBadge(t.status)}`}>
-                {statusLabel(t.status)}
-              </span>
-            </div>
-          ))}
-          {recentTickets.length === 0 && <p className="text-sm text-gray-400">Chưa có ticket</p>}
-        </div>
-      </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

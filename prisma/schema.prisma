@@ -69,6 +69,10 @@ model User {
   documents       Document[]
   assignedAssets  Asset[]      @relation("AssignedAsset")
   agent           Agent[]      @relation("AgentUser")
+  assignedProblems Problem[]   @relation("AssignedProblems")
+  assignedChanges  Change[]    @relation("AssignedChanges")
+  ticketFollowups  TicketFollowup[]
+  ticketTasks      TicketTask[]
 }
 
 model Account {
@@ -430,6 +434,7 @@ model TicketFollowup {
   createdAt DateTime @default(now())
 
   ticket Ticket @relation(fields: [ticketId], references: [id])
+  user   User   @relation(fields: [userId], references: [id])
 }
 
 model TicketTask {
@@ -443,6 +448,7 @@ model TicketTask {
   createdAt   DateTime @default(now())
 
   ticket Ticket @relation(fields: [ticketId], references: [id])
+  user   User?  @relation(fields: [userId], references: [id])
 }
 
 // ============================================================
@@ -466,6 +472,7 @@ model Problem {
 
   category     Category?    @relation(fields: [categoryId], references: [id])
   organization Organization @relation(fields: [organizationId], references: [id])
+  assignedTo   User?        @relation("AssignedProblems", fields: [assignedToId], references: [id])
 }
 
 model Change {
@@ -486,6 +493,7 @@ model Change {
 
   category     Category?    @relation(fields: [categoryId], references: [id])
   organization Organization @relation(fields: [organizationId], references: [id])
+  assignedTo   User?        @relation("AssignedChanges", fields: [assignedToId], references: [id])
 }
 
 // ============================================================
