@@ -1,0 +1,34 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "instructions": [
+    "AGENTS.md",
+    "CLAUDE.md",
+    ".claude/rules/*.md",
+    ".opencode/skills/crm-workflow/SKILL.md"
+  ],
+  "permission": {
+    "skill": {
+      "backend-dev": "allow",
+      "frontend-dev": "allow",
+      "best-practices": "allow",
+      "crm-workflow": "allow",
+      "add-provider": "allow",
+      "debug-backend": "allow",
+      "debug-frontend": "allow",
+      "new-feature": "allow",
+      "new-feature-nextjs": "allow",
+      "split-monolith": "allow",
+      "caveman-default": "allow",
+      "design-system": "allow"
+    }
+  },
+  "agent": {
+    "crm-dev": {
+      "description": "CRM full-stack developer with backend, frontend, and best practices knowledge",
+      "prompt": "You are a senior full-stack developer building a CRM system. Apply backend and frontend best practices. Write clean, type-safe, and well-tested code.",
+      "tools": {
+        "skill": true
+      }
+    }
+  }
+}

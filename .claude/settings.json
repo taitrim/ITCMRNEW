@@ -1,0 +1,148 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run *)",
+      "Bash(npm ci)",
+      "Bash(npm install)",
+      "Bash(npx tsc *)",
+      "Bash(npx eslint *)",
+      "Bash(npx playwright *)",
+      "Bash(npx prisma generate*)",
+      "Bash(npx prisma validate*)",
+      "Bash(npx prisma migrate dev*)",
+      "Bash(npx prisma migrate deploy*)",
+      "Bash(npx prisma studio*)",
+      "Bash(npx vitest *)",
+      "Bash(flutter *)",
+      "Bash(dart *)",
+      "Bash(cargo *)",
+      "Bash(rustup *)",
+      "Bash(git *)",
+      "Bash(gh *)",
+      "Bash(node *)",
+      "Bash(python *)",
+      "Bash(pip *)",
+      "Bash(docker *)",
+      "Bash(curl *)",
+      "Bash(wget *)",
+      "Bash(ls *)",
+      "Bash(dir *)",
+      "Bash(mkdir *)",
+      "Bash(mv *)",
+      "Bash(cp *)",
+      "Bash(cat *)",
+      "Bash(type *)",
+      "Bash(echo *)",
+      "Bash(which *)",
+      "Bash(where *)",
+      "Bash(pytest *)",
+      "Bash(unzip *)",
+      "Bash(zip *)",
+      "Bash(tar *)",
+      "Bash(chmod *)",
+      "PowerShell(*)",
+      "WebSearch",
+      "WebFetch"
+    ],
+    "deny": [
+      "Read(.env)",
+      "Read(.env.*)",
+      "Read(.dev.vars)",
+      "Read(.dev.vars.*)",
+      "Read(*.pem)",
+      "Read(*.key)",
+      "Read(*.p12)",
+      "Read(*.pfx)",
+      "Read(secrets/**)",
+      "Bash(rm -rf *)",
+      "Bash(npm publish *)",
+      "Bash(npx --yes *)",
+      "Bash(prisma migrate reset*)",
+      "Bash(npx prisma migrate reset*)",
+      "Bash(prisma db push --force-reset*)",
+      "Bash(npx prisma db push --force-reset*)",
+      "Bash(prisma db push --accept-data-loss*)",
+      "Bash(npx prisma db push --accept-data-loss*)",
+      "Bash(supabase db reset*)",
+      "Bash(dropdb *)",
+      "Bash(git push --force *)",
+      "Bash(git push -f *)",
+      "Bash(git reset --hard *)"
+    ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/hooks/session-start-resume.js"
+          },
+          {
+            "type": "command",
+            "command": "node scripts/graphify-bootstrap.mjs"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/hooks/config-protection.js"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/hooks/validate-command.js"
+          },
+          {
+            "type": "command",
+            "command": "node .claude/hooks/pre-db-migrate.js"
+          },
+          {
+            "type": "command",
+            "command": "node .claude/hooks/pre-commit-checkpoint.js"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/hooks/post-edit-check.js"
+          },
+          {
+            "type": "command",
+            "command": "node .claude/hooks/check-file-size.js"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/hooks/post-commit-push.js"
+          },
+          {
+            "type": "command",
+            "command": "node .claude/hooks/post-commit-update-progress.js"
+          }
+        ]
+      }
+    ]
+  },
+  "model": "claude-sonnet-4-6",
+  "autoMemoryEnabled": true
+}
