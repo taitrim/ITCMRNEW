@@ -7,21 +7,56 @@ datasource db {
   url      = "file:./dev.db"
 }
 
-model User {
+/// Multi-tenant organization
+model Organization {
   id        String   @id @default(cuid())
-  name      String?
-  email     String   @unique
-  password  String
-  role      String   @default("user")
-  avatar    String?
+  name      String
+  code      String   @unique
+  logo      String?
+  website   String?
+  phone     String?
+  email     String?
+  address   String?
+  isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  accounts  Account[]
-  sessions  Session[]
-  contacts  Contact[]
-  deals     Deal[]
-  activities Activity[]
+  users      User[]
+  locations  Location[]
+  assets     Asset[]
+  tickets    Ticket[]
+  problems   Problem[]
+  changes    Change[]
+  categories Category[]
+  contracts  Contract[]
+  suppliers  Supplier[]
+  kbArticles KnowledgeBaseArticle[]
+  documents  Document[]
+}
+
+/// User with role-based access
+model User {
+  id             String   @id @default(cuid())
+  name           String?
+  email          String   @unique
+  password       String
+  phone          String?
+  mobile         String?
+  role           String   @default("user") // admin, tech, user
+  avatar         String?
+  organizationId String
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization    Organization @relation(fields: [organizationId], references: [id])
+  accounts        Account[]
+  sessions        Session[]
+  assignedTickets Ticket[]    @relation("AssignedTech")
+  createdTickets  Ticket[]    @relation("CreatedBy")
+  activities      Activity[]
+  documents       Document[]
+  assignedAssets  Asset[]     @relation("AssignedAsset")
 }
 
 model Account {
@@ -59,57 +94,244 @@ model VerificationToken {
   @@unique([identifier, token])
 }
 
-model Contact {
-  id         String   @id @default(cuid())
-  firstName  String
-  lastName   String
-  email      String?
-  phone      String?
-  company    String?
-  title      String?
-  notes      String?
-  ownerId    String
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-  deletedAt  DateTime?
+/// Location (physical sites/buildings)
+model Location {
+  id             String   @id @default(cuid())
+  name           String
+  address        String?
+  city           String?
+  state          String?
+  postalCode     String?
+  country        String?
+  phone          String?
+  organizationId String
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
-  owner      User          @relation(fields: [ownerId], references: [id])
-  deals      Deal[]
-  activities Activity[]
+  organization Organization @relation(fields: [organizationId], references: [id])
+  assets       Asset[]
 }
 
-model Deal {
-  id          String    @id @default(cuid())
-  title       String
-  value       Float     @default(0)
-  stage       String    @default("LEAD")
-  probability Int       @default(10)
-  contactId   String?
-  ownerId     String
-  expectedCloseDate DateTime?
-  notes       String?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+/// Category (ITIL categories for tickets/problems/changes)
+model Category {
+  id             String   @id @default(cuid())
+  name           String
+  description    String?
+  type           String   @default("ticket") // ticket, problem, change, asset
+  icon           String?
+  color          String?
+  parentId       String?
+  organizationId String
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
-  contact    Contact?   @relation(fields: [contactId], references: [id])
-  owner      User       @relation(fields: [ownerId], references: [id])
-  activities Activity[]
+  parent      Category?  @relation("CategoryTree", fields: [parentId], references: [id])
+  children    Category[] @relation("CategoryTree")
+  organization Organization @relation(fields: [organizationId], references: [id])
+  tickets     Ticket[]
+  problems    Problem[]
+  changes     Change[]
 }
 
+/// Asset (generic - like glpi_computers, glpi_printers etc.)
+model Asset {
+  id             String   @id @default(cuid())
+  name           String
+  assetType      String
+  serialNumber   String?
+  inventoryNumber String?
+  status         String   @default("in_use")
+  manufacturer   String?
+  model          String?
+  brand          String?
+  purchaseDate   DateTime?
+  warrantyEnd    DateTime?
+  warrantyInfo   String?
+  price          Float?
+  locationId     String?
+  organizationId String
+  assignedToId   String?
+  notes          String?
+  cpu            String?
+  ram            String?
+  disk           String?
+  os             String?
+  ipAddress      String?
+  macAddress     String?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  location     Location?    @relation(fields: [locationId], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id])
+  assignedTo   User?        @relation("AssignedAsset", fields: [assignedToId], references: [id])
+}
+
+/// Ticket (Incident/Request - like glpi_tickets)
+model Ticket {
+  id             String   @id @default(cuid())
+  title          String
+  description    String?
+  type           String   @default("incident") // incident, request
+  status         String   @default("new") // new, assigned, in_progress, pending, resolved, closed
+  priority       String   @default("medium") // low, medium, high, urgent, critical
+  urgency        String   @default("medium")
+  impact         String   @default("medium")
+  categoryId     String?
+  assignedToId   String?
+  createdById    String
+  organizationId String
+  dueDate        DateTime?
+  closedAt       DateTime?
+  resolution     String?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  category     Category?    @relation(fields: [categoryId], references: [id])
+  assignedTo   User?        @relation("AssignedTech", fields: [assignedToId], references: [id])
+  createdBy    User         @relation("CreatedBy", fields: [createdById], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id])
+  activities   Activity[]
+}
+
+/// Problem (Root cause analysis)
+model Problem {
+  id             String   @id @default(cuid())
+  title          String
+  description    String?
+  status         String   @default("new") // new, under_analysis, resolved, closed
+  priority       String   @default("medium")
+  categoryId     String?
+  assignedToId   String?
+  organizationId String
+  rootCause      String?
+  resolution     String?
+  closedAt       DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  category     Category?    @relation(fields: [categoryId], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id])
+}
+
+/// Change (Change management)
+model Change {
+  id             String   @id @default(cuid())
+  title          String
+  description    String?
+  status         String   @default("draft") // draft, submitted, approved, in_progress, tested, deployed, closed
+  risk           String   @default("medium") // low, medium, high, critical
+  impact         String   @default("medium")
+  categoryId     String?
+  assignedToId   String?
+  organizationId String
+  plannedStart   DateTime?
+  plannedEnd     DateTime?
+  rollbackPlan   String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  category     Category?    @relation(fields: [categoryId], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id])
+}
+
+/// Knowledge Base (like glpi_knowbaseitems)
+model KnowledgeBaseArticle {
+  id             String   @id @default(cuid())
+  title          String
+  content        String
+  category       String?  // networking, hardware, software, general
+  tags           String?  // comma-separated
+  isPublic       Boolean  @default(false)
+  views          Int      @default(0)
+  organizationId String
+  createdById    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+}
+
+/// Document (file attachments - like glpi_documents)
+model Document {
+  id             String   @id @default(cuid())
+  name           String
+  filename       String
+  mimeType       String?
+  size           Int?
+  description    String?
+  organizationId String
+  uploadedById   String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  uploadedBy   User?        @relation(fields: [uploadedById], references: [id])
+  items        DocumentItem[]
+}
+
+/// Polymorphic link between documents and any entity
+model DocumentItem {
+  id         String @id @default(cuid())
+  documentId String
+  itemId     String
+  itemType   String // Ticket, Asset, Contract
+
+  document Document @relation(fields: [documentId], references: [id])
+}
+
+/// Contract (like glpi_contracts)
+model Contract {
+  id             String   @id @default(cuid())
+  name           String
+  contractType   String   @default("service") // service, maintenance, lease, support, license
+  supplierId     String?
+  organizationId String
+  startDate      DateTime?
+  endDate        DateTime?
+  renewalType    String   @default("manual") // auto, manual
+  cost           Float?
+  notes          String?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  supplier     Supplier?    @relation(fields: [supplierId], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id])
+}
+
+/// Supplier/Vendor (like glpi_suppliers)
+model Supplier {
+  id             String   @id @default(cuid())
+  name           String
+  contactName    String?
+  email          String?
+  phone          String?
+  website        String?
+  address        String?
+  supplierType   String   @default("vendor") // vendor, service_provider, consultant
+  organizationId String
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  contracts    Contract[]
+}
+
+/// Activity Log (timeline for tickets and assets)
 model Activity {
   id        String   @id @default(cuid())
-  type      String
-  subject   String
-  notes     String?
-  dueDate   DateTime?
-  done      Boolean  @default(false)
-  contactId String?
-  dealId    String?
-  ownerId   String
+  type      String   // note, status_change, assignment, resolution, comment
+  content   String?
+  userId    String
+  ticketId  String?
+  assetId   String?
   createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
 
-  contact Contact?  @relation(fields: [contactId], references: [id])
-  deal    Deal?     @relation(fields: [dealId], references: [id])
-  owner   User      @relation(fields: [ownerId], references: [id])
+  user  User    @relation(fields: [userId], references: [id])
+  ticket Ticket? @relation(fields: [ticketId], references: [id])
 }

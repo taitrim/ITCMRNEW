@@ -1,6 +1,6 @@
 # Progress Tracker
 
-**Active phase:** `INIT-P00` — Project bootstrap (🟡 in-progress)
+**Active phase:** `ITSM-P01` — ITSM core features (✅ done)
 **Last update:** 2026-06-14 by setup script
 **Last commit:** _none yet_
 **Plan reference:** `AUDIT_AND_ROADMAP.md` (if exists) OR project README roadmap section.
@@ -190,26 +190,66 @@ Every Friday:
 - _how to undo if needed_
 
 
-### 🟡 INIT-P00 — Project bootstrap
+### ✅ INIT-P00 — Project bootstrap
 
-**Status:** in-progress
+**Status:** done
 **Started:** 2026-06-14
-**Completed:** _pending_
-**Commits:** _pending_
+**Completed:** 2026-06-14
+**Commits:** `6b864ec`
+
+### ✅ ITSM-P01 — GLPI-inspired database & frontend
+
+**Status:** done
+**Started:** 2026-06-14
+**Completed:** 2026-06-14
+**Commits:** `pending`
 
 **Plan for this phase:**
-- [ ] Fill all [BRACKETED] sections in CLAUDE.md
-- [ ] Install dependencies (`npm install` / `flutter pub get` / `cargo build` per preset)
-- [ ] Run dev server, verify it boots
-- [ ] First feature scaffold
-- [ ] First test
-- [ ] First commit with proper message format
+- [x] Thiết kế database schema GLPI-inspired (Organiztion, Location, Category, Asset, Ticket, Problem, Change, KnowledgeBase, Document, Contract, Supplier, Activity)
+- [x] Chạy migration + seed data (3 users, 3 assets, 1 ticket, 2 KB articles, 1 contract, 1 supplier)
+- [x] Xây dựng layout sidebar navigation
+- [x] Dashboard với thống kê + ticket gần đây
+- [x] Assets page (danh sách tài sản)
+- [x] Tickets page (danh sách ticket với filter trạng thái)
+- [x] Knowledge base page
+- [x] Contracts page
+- [x] Suppliers page
+- [x] typecheck + build + test passed
 
 **Delivered:**
-- _pending_
+- Database schema 15 models (GLPI-inspired)
+- 6 pages: Dashboard, Assets, Tickets, Knowledge, Contracts, Suppliers
+- Sidebar navigation
+- Seed data demo
 
 **Verified:**
-- _pending_
+- `tsc --noEmit` — 0 errors
+- `npm run build` — compiled successfully (10 routes)
+- `npm test` — 1 test passed
 
-**Rollback:**
-- `git checkout -- .` (no commits yet)
+**Plan for this phase:**
+- [x] Fill all sections in CLAUDE.md
+- [x] Install dependencies
+- [x] Set up Prisma + SQLite + seed
+- [x] Set up NextAuth v5 auth
+- [x] Create dashboard page with metrics
+- [x] Create login page
+- [x] TypeScript typecheck passes
+- [x] Next.js build succeeds
+- [x] Vitest test passes
+- [x] Git init + first commit
+
+**Delivered:**
+- Next.js 16 + TypeScript project scaffolded
+- Prisma schema (User, Account, Session, Contact, Deal, Activity)
+- Auth (NextAuth v5 with credentials)
+- Login page with form validation
+- Dashboard with contact/deal/pipeline metrics
+- Seed script (demo: admin@newcrm.com / admin123)
+- E2E Playwright scaffold
+- Full agent workflow (7 agents, 16 commands, 8 hooks)
+
+**Verified:**
+- `tsc --noEmit` — 0 errors
+- `npm run build` — compiled successfully
+- `npm test` — 1 test passed

@@ -1,20 +1,20 @@
-# NEW CRM — Fullstack CRM System (Next.js + Prisma + PostgreSQL)
+# GLPI-inspired ITSM & Asset Management System
 
-> Preset: **fullstack**. Stack pre-filled. Fill [BRACKETED] sections before first session.
+> Preset: **fullstack**. Hệ thống quản lý IT service và tài sản, lấy cảm hứng từ GLPI.
 > §§ 1–21 will be appended on final assembly. Keep this file under 300 lines.
 
 ## 1. What This Is
 
-Modern CRM for managing contacts, sales pipeline, activities, and reporting — built for small-to-medium sales teams.
+Hệ thống quản lý IT Service Management (ITSM) và tài sản doanh nghiệp — quản lý ticket, asset, knowledge base, contract, supplier. Phát triển trên nền tảng hiện đại với UI mới.
 
 ## 2. Stack
 
 | Layer | Choice |
 |---|---|
-| Framework | Next.js 15 (App Router) + TypeScript strict |
-| UI | React 19 + Tailwind + shadcn/ui |
+| Framework | Next.js 16 (App Router) + TypeScript strict |
+| UI | React 19 + Tailwind CSS v4 |
 | ORM | Prisma 5 |
-| Database | SQLite (dev) / PostgreSQL 16 (prod) |
+| Database | SQLite (dev) / PostgreSQL (prod) |
 | Auth | NextAuth v5 (Auth.js) |
 | Forms | React Hook Form + Zod |
 | Server state | React Query (TanStack) |
@@ -79,7 +79,7 @@ Tokens in `.claude/skills/design-system/SKILL.md`. shadcn/ui wrapped in `compone
 
 ## 10. Current Focus / Known Issues
 
-Phase INIT-P00 — Project bootstrap. Installing Next.js + Prisma + auth scaffold.
+Phase ITSM-P01 — ITSM core features. Building asset management, ticket system, knowledge base.
 
 ---
 
