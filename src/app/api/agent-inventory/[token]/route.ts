@@ -2,32 +2,263 @@ import { prisma } from "@/lib/db";
 
 /* ===== GLPI Agent Inventory Parser =====
  *
- * GLPI Agent gửi inventory dạng JSON (flag --json):
- *   POST /api/agent-inventory/collect_abc123
- *   { "action": "inventory", "deviceid": "...", "content": { "computers": [...], "monitors": [...], ... } }
+ * Định dạng FusionInventory (từ --server):
+ *   { "action": "inventory", "content": { "computers": [{...}], "monitors": [...], ... } }
  *
- * Hoặc dạng flat: { "action": "inventory", "computers": [...], ... }
+ * Định dạng flat (từ --local --json --full):
+ *   { "action": "inventory", "content": { "hardware": {...}, "cpus": [...], "networks": [...], "operatingsystem": {...}, ... } }
+ *
+ * Parser tự động detect format.
  */
+
+type DeviceRecord = {
+  deviceType: string;
+  name: string;
+  manufacturer: string;
+  modelName: string;
+  serialNumber: string;
+  ipAddress: string;
+  macAddress: string;
+  cpu: string;
+  ram: string;
+  disk: string;
+  os: string;
+  notes: string;
+  componentsJson: string | null;
+};
 
 type InventoryPayload = Record<string, unknown>;
 
-function parseInventory(body: InventoryPayload) {
-  const content: Record<string, unknown[]> = (body.content as any) || body || {};
-  const devices: Array<{
-    deviceType: string;
-    name: string;
-    manufacturer: string;
-    modelName: string;
-    serialNumber: string;
-    ipAddress: string;
-    macAddress: string;
-    cpu: string;
-    ram: string;
-    disk: string;
-    os: string;
-    notes: string;
-    componentsJson: string | null;
-  }> = [];
+/* ===== Dispatcher: detect format and route ===== */
+function parseInventory(body: InventoryPayload): DeviceRecord[] {
+  const content = (body.content as Record<string, any>) || {};
+  // Flat format has no "computers" key — categories are at content root
+  if (!content.computers && (content.hardware || content.cpus || content.networks || content.operatingsystem)) {
+    return parseFlatInventory(content, body.deviceid as string);
+  }
+  // FusionInventory format — has content.computers array
+  return parseFusionInventory(body);
+}
+
+/* ===== Flat format parser (--local --json --full) ===== */
+function parseFlatInventory(content: Record<string, any>, deviceId: string): DeviceRecord[] {
+  const devices: DeviceRecord[] = [];
+
+  // === Main computer device ===
+  const hw = content.hardware || {};
+  const bios = content.bios || {};
+  const os = content.operatingsystem || {};
+  const cpus = asArray(content.cpus);
+  const nets = asArray(content.networks);
+  const drives = asArray(content.drives);
+  const storages = asArray(content.storages);
+  const videos = asArray(content.videos);
+  const monitors = asArray(content.monitors);
+  const softwares = asArray(content.softwares);
+  const printers = asArray(content.printers);
+  const memorySticks = asArray(content.memory || content.slots);
+
+  // CPU
+  const cpuList = cpus.map((p: any) => {
+    const name = p.name || p.description || p.caption || "";
+    const freq = p.frequency || p.max_frequency || p.speed || "";
+    return freq ? `${name} @ ${freq}MHz` : name;
+  }).filter(Boolean).join("; ");
+
+  // RAM
+  const ramMb = hw.memory || hw.physical_memory || 0;
+  const ramStr = ramMb ? `${Math.round(ramMb)} MB` : "";
+
+  // Disk — prefer physical storages over logical drives
+  const totalStorage = storages.reduce((sum: number, s: any) => sum + (s.size || s.capacity || 0), 0);
+  const totalDrives = drives.reduce((sum: number, d: any) => sum + ((d.total || 0) * 1024 * 1024), 0); // drives.total is MB
+  const totalDisk = totalStorage > 0 ? totalStorage : totalDrives;
+  const diskStr = totalDisk > 0 ? formatBytes(totalDisk) : "";
+
+  // Serial: try bios fields, then hardware uuid as fallback
+  const serialNumber = bios.sserial || bios.serial_number || hw.serial_number || "";
+
+  // Manufacturer & model
+  const manufacturer = bios.smanufacturer || bios.mmanufacturer || hw.manufacturer || "";
+  const modelName = bios.smodel || bios.mmodel || hw.model || "";
+
+  // IP & MAC from first network
+  const firstNet = nets[0] || {};
+
+  // Build components JSON
+  const components: Record<string, any> = {};
+
+  // Memory sticks
+  const memList: any[] = memorySticks.map((s: any) => ({
+    capacity: s.capacity,
+    speed: s.speed,
+    manufacturer: s.manufacturer || s.vendor,
+    slot: s.slot || s.name || s.caption,
+    type: s.type || s.caption,
+  }));
+  if (memList.length > 0) components.memory = memList;
+
+  // Physical storage drives
+  const diskList: any[] = storages.map((s: any) => ({
+    model: s.model || s.name || s.caption,
+    size: s.size || s.capacity,
+    interface: s.interface || s.interface_type,
+    type: (s.is_ssd || s.ssd) ? "SSD" : (s.disk_type || "HDD"),
+  }));
+  if (diskList.length > 0) components.disks = diskList;
+
+  // Logical drives (volumes)
+  const volList: any[] = drives.map((d: any) => ({
+    letter: d.letter || "",
+    label: d.label || d.volumn || "",
+    filesystem: d.filesystem || "",
+    total: d.total || 0,
+    free: d.free || 0,
+  }));
+  if (volList.length > 0) components.volumes = volList;
+
+  // GPUs
+  const gpuList: any[] = videos.map((v: any) => ({
+    name: v.name || v.chipset || v.caption,
+    memory: v.memory,
+    driver: v.driver_version || v.driver,
+  }));
+  if (gpuList.length > 0) components.gpus = gpuList;
+
+  // Monitors
+  const monList: any[] = monitors.map((m: any) => ({
+    name: m.name || m.caption,
+    manufacturer: m.manufacturer,
+    serial: m.serial_number || m.serial,
+  }));
+  if (monList.length > 0) components.monitors = monList;
+
+  // Software
+  const swList: any[] = softwares.map((s: any) => ({
+    name: s.name,
+    version: s.version,
+    publisher: s.publisher || s.manufacturer,
+  }));
+  if (swList.length > 0) components.software = swList;
+
+  // Network adapters
+  const netList: any[] = nets.map((n: any) => ({
+    name: n.name || n.caption,
+    mac: n.mac_address || n.mac,
+    ip: n.ip_address || n.ip,
+    speed: n.speed,
+    type: n.type || n.adapter_type,
+  }));
+  if (netList.length > 0) components.network = netList;
+
+  // BIOS
+  components.bios = {
+    manufacturer: bios.bmanufacturer || bios.manufacturer || "",
+    version: bios.bversion || bios.version || "",
+    date: bios.bdate || bios.date || "",
+  };
+
+  // OS
+  components.os = {
+    name: os.full_name || os.name || os.caption || "",
+    version: os.version || "",
+    build: os.build_number || os.build || "",
+    architecture: os.architecture || "",
+  };
+
+  // Form factor
+  components.formFactor = getFormFactor(hw);
+
+  // CPU summary
+  components.cpuSummary = cpuList;
+
+  const componentsJson = Object.keys(components).length > 0 ? JSON.stringify(components) : null;
+
+  devices.push({
+    deviceType: "computer",
+    name: hw.name || hw.hostname || modelName || "Unknown PC",
+    manufacturer,
+    modelName,
+    serialNumber,
+    ipAddress: firstNet.ip_address || firstNet.ip || "",
+    macAddress: firstNet.mac_address || firstNet.mac || "",
+    cpu: cpuList,
+    ram: ramStr,
+    disk: diskStr,
+    os: os.full_name || os.name || os.caption || "",
+    notes: `GLPI Agent inventory (flat) — deviceid: ${deviceId || ""}`,
+    componentsJson,
+  });
+
+  // Additional network interfaces as separate network devices
+  for (let i = 1; i < nets.length; i++) {
+    const n = nets[i];
+    if (n.mac_address || n.ip_address || n.mac || n.ip) {
+      devices.push({
+        deviceType: "network",
+        name: n.name || `Network ${i}`,
+        manufacturer: "",
+        modelName: "",
+        serialNumber: "",
+        ipAddress: n.ip_address || n.ip || "",
+        macAddress: n.mac_address || n.mac || "",
+        cpu: "",
+        ram: "",
+        disk: "",
+        os: "",
+        notes: `Network interface #${i + 1}`,
+        componentsJson: null,
+      });
+    }
+  }
+
+  // === Standalone monitors ===
+  for (const m of monitors as any[]) {
+    devices.push({
+      deviceType: "monitor",
+      name: m.name || "Monitor",
+      manufacturer: m.manufacturer || "",
+      modelName: m.name || "",
+      serialNumber: m.serial_number || m.serial || "",
+      ipAddress: "", macAddress: "",
+      cpu: m.size ? `${m.size}"` : "",
+      ram: (m.resolution || `${m.width || ""}x${m.height || ""}`).replace(/^x$/, ""),
+      disk: m.display_type || m.type || "",
+      os: "",
+      notes: "", componentsJson: JSON.stringify({ size: m.size, resolution: m.resolution, type: m.display_type }),
+    });
+  }
+
+  // === Standalone printers ===
+  for (const p of printers as any[]) {
+    devices.push({
+      deviceType: "printer",
+      name: p.name || "Printer",
+      manufacturer: p.manufacturer || "",
+      modelName: p.name || "",
+      serialNumber: p.serial_number || "",
+      ipAddress: p.ip || "",
+      macAddress: "",
+      cpu: p.printer_type || p.type || "",
+      ram: "",
+      disk: "",
+      os: "",
+      notes: "",
+      componentsJson: JSON.stringify({
+        type: p.printer_type || p.type,
+        cartridges: (p.cartridges || []).map((c: any) => ({ name: c.name, type: c.type, level: c.level })),
+        connectivity: p.connectivity || "",
+      }),
+    });
+  }
+
+  return devices;
+}
+
+/* ===== FusionInventory format parser (từ --server) ===== */
+function parseFusionInventory(body: InventoryPayload): DeviceRecord[] {
+  const content: Record<string, any> = (body.content as any) || {};
+  const devices: DeviceRecord[] = [];
 
   // Parse computers
   const computers = asArray(content.computers);
@@ -55,8 +286,6 @@ function parseInventory(body: InventoryPayload) {
 
     // Build components JSON
     const components: Record<string, any> = {};
-
-    // Total RAM slots
     const totalSlots = mem.total_slots || 0;
 
     // Memory sticks
@@ -70,7 +299,6 @@ function parseInventory(body: InventoryPayload) {
         type: s.type || s.caption,
       });
     }
-    // Fallback: use the memory summary as a single stick
     if (memList.length === 0 && mem.physical_memory) {
       memList.push({ capacity: mem.physical_memory * 1024 * 1024, speed: null, manufacturer: null, slot: null, type: null });
     }
@@ -87,7 +315,6 @@ function parseInventory(body: InventoryPayload) {
         type: d.disk_type || (d.is_ssd ? "SSD" : "HDD"),
       });
     }
-    // Fallback: create disk entry from volume summary
     if (diskList.length === 0 && vols.length > 0) {
       for (const v of vols as any[]) {
         diskList.push({ model: null, size: v.total, interface: null, type: null });
@@ -136,25 +363,19 @@ function parseInventory(body: InventoryPayload) {
     }
     components.network = netList;
 
-    // BIOS
+    // BIOS & OS
     components.bios = {
       manufacturer: hw.bios_manufacturer || hw.manufacturer,
       version: hw.bios_version,
       date: hw.bios_date,
     };
-
-    // OS
     components.os = {
       name: os.full_name || os.name,
       version: os.version,
       build: os.build_number,
       architecture: os.architecture,
     };
-
-    // Form factor (PC / Laptop / AIO)
     components.formFactor = getFormFactor(hw);
-
-    // Store CPU summary for overview display
     components.cpuSummary = cpuList;
 
     const componentsJson = Object.keys(components).length > 0 ? JSON.stringify(components) : null;
@@ -198,16 +419,9 @@ function parseInventory(body: InventoryPayload) {
     }
   }
 
-  // Parse monitors — store size, resolution, type
+  // Parse monitors
   const monitors = asArray(content.monitors);
   for (const m of monitors as any[]) {
-    const monComponents: Record<string, any> = {};
-    monComponents.size = m.size || "";
-    monComponents.resolution = m.resolution || `${m.width || ""}x${m.height || ""}`;
-    monComponents.display_type = m.display_type || m.type || "";
-    monComponents.manufacturer = m.manufacturer || "";
-    monComponents.name = m.name || "";
-    monComponents.serial = m.serial_number || "";
     devices.push({
       deviceType: "monitor",
       name: m.name || "Monitor",
@@ -216,26 +430,20 @@ function parseInventory(body: InventoryPayload) {
       serialNumber: m.serial_number || "",
       ipAddress: "", macAddress: "",
       cpu: m.size ? `${m.size}"` : "",
-      ram: monComponents.resolution || "",
-      disk: monComponents.display_type || "",
+      ram: m.resolution || `${m.width || ""}x${m.height || ""}`,
+      disk: m.display_type || m.type || "",
       os: "",
       notes: "",
-      componentsJson: JSON.stringify(monComponents),
+      componentsJson: JSON.stringify({
+        size: m.size, resolution: m.resolution, display_type: m.display_type,
+        manufacturer: m.manufacturer, name: m.name, serial: m.serial_number,
+      }),
     });
   }
 
-  // Parse printers — store type, cartridges
+  // Parse printers
   const printers = asArray(content.printers);
   for (const p of printers as any[]) {
-    const prnComponents: Record<string, any> = {};
-    prnComponents.printer_type = p.printer_type || p.type || p.comment || "";
-    prnComponents.cartridges = (p.cartridges || p.toners || []).map((c: any) => ({
-      name: c.name || c.color,
-      type: c.type,
-      level: c.level,
-    }));
-    prnComponents.connectivity = p.connectivity || "";
-    prnComponents.serial = p.serial_number || "";
     devices.push({
       deviceType: "printer",
       name: p.name || "Printer",
@@ -244,10 +452,14 @@ function parseInventory(body: InventoryPayload) {
       serialNumber: p.serial_number || "",
       ipAddress: (p as any).ip || "",
       macAddress: "",
-      cpu: prnComponents.printer_type || "",
-      ram: prnComponents.cartridges.length > 0 ? `${prnComponents.cartridges.length} hộp` : "",
+      cpu: p.printer_type || p.type || p.comment || "",
+      ram: (p.cartridges || p.toners || []).length > 0 ? `${(p.cartridges || p.toners || []).length} hộp` : "",
       disk: "", os: "",
-      notes: "", componentsJson: JSON.stringify(prnComponents),
+      notes: "",
+      componentsJson: JSON.stringify({
+        printer_type: p.printer_type || p.type, cartridges: (p.cartridges || p.toners || []),
+        connectivity: p.connectivity, serial: p.serial_number,
+      }),
     });
   }
 
@@ -255,34 +467,18 @@ function parseInventory(body: InventoryPayload) {
   const peripherals = asArray(content.peripherals);
   for (const p of peripherals as any[]) {
     devices.push({
-      deviceType: "peripheral",
-      name: p.name || "Peripheral",
-      manufacturer: p.manufacturer || "",
-      modelName: p.name || "",
+      deviceType: "peripheral", name: p.name || "Peripheral",
+      manufacturer: p.manufacturer || "", modelName: p.name || "",
       serialNumber: p.serial_number || "",
-      ipAddress: "",
-      macAddress: "",
-      cpu: "", ram: "", disk: "", os: "",
+      ipAddress: "", macAddress: "", cpu: "", ram: "", disk: "", os: "",
       notes: "", componentsJson: null,
     });
   }
 
-  // Parse networks (switches, routers, APs) — store type, firmware, ports
+  // Parse networks (switches, routers, APs)
   const networks = asArray(content.networks);
   for (const n of networks as any[]) {
     if (!n.ip_address && !n.mac_address && !n.serial_number) continue;
-    const netComponents: Record<string, any> = {};
-    netComponents.type = n.network_type || n.type || "";
-    netComponents.firmware = n.firmware || n.sysdescr || "";
-    netComponents.version = n.version || "";
-    netComponents.port_count = n.ports || n.port_count || "";
-    netComponents.ports = (n.ports_list || n.port_details || []).map((pt: any) => ({
-      name: pt.name || pt.port,
-      type: pt.type,
-      speed: pt.speed,
-    }));
-    netComponents.manufacturer = n.manufacturer || "";
-    netComponents.name = n.name || "";
     devices.push({
       deviceType: "network",
       name: n.name || "Network device",
@@ -291,22 +487,23 @@ function parseInventory(body: InventoryPayload) {
       serialNumber: n.serial_number || "",
       ipAddress: n.ip || n.ip_address || "",
       macAddress: n.mac_address || "",
-      cpu: netComponents.type || "",
-      ram: netComponents.firmware || "",
-      disk: netComponents.port_count ? `${netComponents.port_count} cổng` : "",
+      cpu: n.network_type || n.type || "",
+      ram: n.firmware || n.sysdescr || "",
+      disk: (n.ports || n.port_count) ? `${n.ports || n.port_count} cổng` : "",
       os: "",
-      notes: "", componentsJson: JSON.stringify(netComponents),
+      notes: "",
+      componentsJson: JSON.stringify({
+        type: n.network_type || n.type, firmware: n.firmware || n.sysdescr,
+        version: n.version, port_count: n.ports || n.port_count,
+        ports: (n.ports_list || n.port_details || []).map((pt: any) => ({ name: pt.name || pt.port, type: pt.type, speed: pt.speed })),
+        manufacturer: n.manufacturer, name: n.name,
+      }),
     });
   }
 
-  // Parse phones — store firmware, phone number
+  // Parse phones
   const phones = asArray(content.phones);
   for (const p of phones as any[]) {
-    const phComponents: Record<string, any> = {};
-    phComponents.firmware = p.firmware || "";
-    phComponents.phone_number = p.phone_number || p.line || "";
-    phComponents.phone_type = p.phone_type || p.type || "IP";
-    phComponents.mac = p.mac_address || "";
     devices.push({
       deviceType: "phone",
       name: p.name || "Phone",
@@ -315,10 +512,11 @@ function parseInventory(body: InventoryPayload) {
       serialNumber: p.serial_number || "",
       ipAddress: p.ip || "",
       macAddress: p.mac_address || "",
-      cpu: phComponents.firmware || "",
-      ram: phComponents.phone_number || "",
+      cpu: p.firmware || "",
+      ram: p.phone_number || p.line || "",
       disk: "", os: "",
-      notes: "", componentsJson: JSON.stringify(phComponents),
+      notes: "",
+      componentsJson: JSON.stringify({ firmware: p.firmware, phone_number: p.phone_number || p.line, phone_type: p.phone_type || p.type, mac: p.mac_address }),
     });
   }
 

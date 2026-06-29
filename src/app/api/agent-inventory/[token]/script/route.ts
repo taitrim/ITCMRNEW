@@ -100,14 +100,19 @@ echo OK.
 echo.
 echo [2/3] Dang thu thap thong tin...
 
-set "OUTPUT_DIR=%TEMP_DIR%\\output"
+:: Dung absolute path de tranh loi working directory
+set "BASE_DIR=%~dp0"
+set "OUTPUT_DIR=%BASE_DIR%%TEMP_DIR%\\output"
 if exist "%OUTPUT_DIR%" rmdir /s /q "%OUTPUT_DIR%" >nul 2>&1
 mkdir "%OUTPUT_DIR%" >nul 2>&1
 
-echo Dang chay GLPI Agent...
-cd /d "%~dp0"
-"!AGENT_EXE!" --local "%OUTPUT_DIR%" --json --no-ssl-check --logfile agent-log.txt
+echo Dang chay GLPI Agent (co the mat ~1 phut)...
+cd /d "%BASE_DIR%"
+"!AGENT_EXE!" --local "%OUTPUT_DIR%" --json --full --no-ssl-check --logfile agent-log.txt
 set "EXIT_CODE=%ERRORLEVEL%"
+
+:: Doi mot chut de agent ghi file xong
+ping -n 3 127.0.0.1 >nul 2>&1
 
 :: Tim file JSON output
 set "JSON_FILE="
@@ -124,6 +129,9 @@ if defined JSON_FILE (
     echo [LOI] Khong tim thay file JSON tu GLPI Agent.
     echo Kiem tra log:
     if exist agent-log.txt type agent-log.txt
+    echo.
+    echo Danh sach thu muc output:
+    dir /s "%OUTPUT_DIR%" 2>nul
 )
 
 if exist agent-log.txt del agent-log.txt >nul 2>&1
