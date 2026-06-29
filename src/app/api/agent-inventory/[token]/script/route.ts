@@ -184,7 +184,7 @@ echo "Hoan thanh!"`;
   let filename: string, content: string, mime: string;
   if (isWindows) {
     filename = "thu-thap.bat";
-    content = batContent;
+    content = batContent.replace(/\n/g, "\r\n"); // CRLF for cmd.exe
     mime = "application/bat";
   } else {
     filename = "thu-thap.sh";
