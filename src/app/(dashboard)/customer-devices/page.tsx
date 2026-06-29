@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { HardDrive, Plus, Search, Edit3, Trash2, X, Filter, Building2, Monitor } from "lucide-react";
+import { HardDrive, Plus, Search, Edit3, Trash2, X, Filter, Building2, Monitor, CheckSquare, Square, Trash } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const DEVICE_ICONS: Record<string, string> = {
@@ -79,6 +79,10 @@ export default function CustomerDevicesPage() {
   const [statusFilter, setStatusFilter] = useState("");
   const [conditionFilter, setConditionFilter] = useState("");
   const [showAdvanced, setShowAdvanced] = useState(false);
+
+  // Bulk select state
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
 
   // Modal state
   const [createOpen, setCreateOpen] = useState(false);
@@ -181,6 +185,46 @@ export default function CustomerDevicesPage() {
       .then(() => { setDeleteOpen(false); setDeleteDevice(null); fetchList(); });
   };
 
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const selectAllInGroup = (employeeDevices: any[]) => {
+    const ids = employeeDevices.map((d: any) => d.id);
+    const allSelected = ids.every((id: string) => selectedIds.has(id));
+    if (allSelected) {
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        ids.forEach((id: string) => next.delete(id));
+        return next;
+      });
+    } else {
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        ids.forEach((id: string) => next.add(id));
+        return next;
+      });
+    }
+  };
+
+  const handleBulkDelete = () => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    fetch("/api/customer-devices/bulk-delete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids }),
+    }).then(r => r.json()).then(() => {
+      setSelectedIds(new Set());
+      setBulkDeleteOpen(false);
+      fetchList();
+    });
+  };
+
   const set = (k: string, v: any) => setForm((prev: any) => ({ ...prev, [k]: v }));
 
   const filtered = devices.filter(d => {
@@ -238,6 +282,22 @@ export default function CustomerDevicesPage() {
             </button>
           ))}
         </div>
+        {/* Bulk action bar */}
+        {selectedIds.size > 0 && (
+          <div className="mt-2 flex items-center gap-2 animate-in-up">
+            <span className="text-xs text-gray-500 bg-gray-100 px-2.5 py-1 rounded-full">
+              Đã chọn {selectedIds.size} thiết bị
+            </span>
+            <button onClick={() => setSelectedIds(new Set())}
+              className="text-xs text-gray-400 hover:text-gray-600 px-2 py-1">
+              Bỏ chọn
+            </button>
+            <button onClick={() => setBulkDeleteOpen(true)}
+              className="ml-auto h-8 px-3 flex items-center gap-1.5 rounded-xl bg-red-50 text-red-600 text-xs font-medium hover:bg-red-100">
+              <Trash2 size={14} /> Xóa đã chọn
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="px-4 mt-3 space-y-4">
@@ -259,15 +319,26 @@ export default function CustomerDevicesPage() {
             </div>
             <div className="space-y-2">
               {group.employees.map((emp) => (
-                <div key={emp.employeeId || "__unassigned__"}>
-                  <div className="flex items-center gap-1.5 mb-1.5 ml-1">
-                    <div className="w-1 h-1 rounded-full bg-gray-300" />
-                    <span className="text-[11px] text-gray-500 font-medium">{emp.employeeName}</span>
-                    <span className="text-[10px] text-gray-400">({emp.employeeDevices.length})</span>
-                  </div>
+                  <div key={emp.employeeId || "__unassigned__"}>
+                    <div className="flex items-center gap-1.5 mb-1.5 ml-0.5">
+                      <button onClick={() => selectAllInGroup(emp.employeeDevices)}
+                        className="flex-shrink-0 text-gray-300 hover:text-primary transition-colors">
+                        {emp.employeeDevices.every((d: any) => selectedIds.has(d.id))
+                          ? <CheckSquare size={14} className="text-primary" />
+                          : <Square size={14} />}
+                      </button>
+                      <span className="text-[11px] text-gray-500 font-medium">{emp.employeeName}</span>
+                      <span className="text-[10px] text-gray-400">({emp.employeeDevices.length})</span>
+                    </div>
                   <div className="space-y-1.5">
                     {emp.employeeDevices.map((d: any) => (
-                      <Link key={d.id} href={`/customer-devices/${d.id}`} className="block">
+                      <div key={d.id} className="flex items-start gap-0">
+                        {/* Checkbox */}
+                        <button onClick={(e) => { e.preventDefault(); toggleSelect(d.id); }}
+                          className="mt-2.5 mr-1.5 flex-shrink-0 text-gray-300 hover:text-primary transition-colors">
+                          {selectedIds.has(d.id) ? <CheckSquare size={18} className="text-primary" /> : <Square size={18} />}
+                        </button>
+                        <Link href={`/customer-devices/${d.id}`} className="block flex-1">
                         <div className="bg-white rounded-xl p-3 shadow-xs border border-border active:scale-[0.98] transition-transform">
                           <div className="flex items-start gap-3">
                             <div className="w-9 h-9 rounded-lg bg-gray-50 flex items-center justify-center text-base flex-shrink-0">{DEVICE_ICONS[d.deviceType] || "📦"}</div>
@@ -293,6 +364,7 @@ export default function CustomerDevicesPage() {
                           </div>
                         </div>
                       </Link>
+                      </div>
                     ))}
                   </div>
                 </div>
@@ -520,6 +592,28 @@ export default function CustomerDevicesPage() {
             <div className="flex items-center gap-2 justify-end">
               <button onClick={() => { setDeleteOpen(false); setDeleteDevice(null); }} className="h-8 px-4 rounded-xl text-xs text-gray-600 hover:bg-gray-100">Hủy</button>
               <button onClick={handleDelete} className="h-8 px-4 rounded-xl bg-red-500 text-white text-xs font-medium">Xóa</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk delete confirmation */}
+      {bulkDeleteOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 animate-in">
+          <div className="bg-white rounded-2xl w-full max-w-sm mx-4 p-5 shadow-xl">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-xl bg-red-50 flex items-center justify-center"><Trash2 size={20} className="text-red-500" /></div>
+              <div>
+                <h3 className="font-semibold text-sm">Xóa hàng loạt</h3>
+                <p className="text-xs text-gray-500 mt-0.5">Thao tác này không thể hoàn tác.</p>
+              </div>
+            </div>
+            <p className="text-xs text-gray-600 mb-4">
+              Bạn có chắc muốn xóa <strong>{selectedIds.size} thiết bị</strong> đã chọn?
+            </p>
+            <div className="flex items-center gap-2 justify-end">
+              <button onClick={() => setBulkDeleteOpen(false)} className="h-8 px-4 rounded-xl text-xs text-gray-600 hover:bg-gray-100">Hủy</button>
+              <button onClick={handleBulkDelete} className="h-8 px-4 rounded-xl bg-red-500 text-white text-xs font-medium">Xóa {selectedIds.size} thiết bị</button>
             </div>
           </div>
         </div>
