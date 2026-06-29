@@ -9,9 +9,12 @@ export default async function ProblemsPage() {
   const session = await auth();
   if (!session?.user) redirect("/login");
 
-  const problems = await prisma.problem.findMany({
-    where: { organizationId: session.user.organizationId! },
-    include: { assignedTo: { select: { name: true } }, category: { select: { name: true, color: true } } },
+  const problems = await prisma.problems.findMany({
+    where: { entitiesId: session.user.organizationId!, isDeleted: false },
+    include: {
+      problemUsers: { include: { users: { select: { name: true } } }, where: { type: 1 } },
+      itilcategories: { select: { name: true } },
+    },
     orderBy: { createdAt: "desc" },
   });
 
@@ -33,13 +36,13 @@ export default async function ProblemsPage() {
               <CardContent className="flex items-start justify-between py-4">
                 <div>
                   <div className="flex items-center gap-2">
-                    <h3 className="font-medium text-gray-900">{p.title}</h3>
-                    <Badge>{p.status}</Badge>
+                    <h3 className="font-medium text-gray-900">{p.name}</h3>
+                    <Badge>#{p.status}</Badge>
                   </div>
-                  <p className="text-sm text-muted-foreground mt-1">{p.description?.slice(0, 120)}...</p>
+                  <p className="text-sm text-muted-foreground mt-1">{p.content?.slice(0, 120)}...</p>
                   <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
-                    {p.assignedTo && <span>{p.assignedTo.name}</span>}
-                    {p.category && <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full" style={{ background: p.category.color || "#ccc" }} />{p.category.name}</span>}
+                    {p.problemUsers?.[0]?.users && <span>{p.problemUsers[0].users.name}</span>}
+                    {p.itilcategories && <span>{p.itilcategories.name}</span>}
                   </div>
                 </div>
               </CardContent>

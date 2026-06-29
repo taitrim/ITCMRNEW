@@ -26,7 +26,7 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ id
   const asset = await prisma.asset.findUnique({
     where: { id },
     include: {
-      manufacturer: true, location: true, assignedTo: { select: { name: true, email: true } },
+      manufacturer: true, location: true, assignedTo: { select: { name: true } },
       computerDetail: { include: { diskVolumes: true, networkInterfaces: true, softwareInstalls: true } },
       printerDetail: true, networkDetail: true,
       licenseAssignments: { include: { license: true } },

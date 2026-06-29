@@ -5,8 +5,8 @@ export async function GET() {
   const session = await auth();
   if (!session?.user) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
-  const items = await prisma.consumable.findMany({
-    where: { organizationId: session.user.organizationId! },
+  const items = await prisma.consumableitems.findMany({
+    where: { entitiesId: session.user.organizationId! },
     orderBy: { name: "asc" },
   });
   return Response.json(items);

@@ -1,0 +1,123 @@
+// ============================================================
+// MODULE: CUSTOMER MANAGEMENT (Manual addition)
+// ============================================================
+// CUSTOMER_START
+
+/// Loại khách hàng: Cá nhân / Doanh nghiệp
+model CustomerCategory {
+  id        String   @id @default(cuid())
+  name      String
+  code      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  customers Customer[]
+}
+
+/// Khách hàng
+model Customer {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  name        String
+  shortName   String?
+  categoryId  String
+  category    CustomerCategory @relation(fields: [categoryId], references: [id])
+  taxCode     String?
+  website     String?
+  phone       String?
+  email       String?
+  logo        String?
+  note        String?
+  isActive    Boolean  @default(true)
+  isCodeAuto  Boolean  @default(true)
+
+  entityId    String?
+  entity      Entity? @relation(fields: [entityId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  addresses CustomerAddress[]
+  contacts  CustomerContact[]
+  employees CustomerEmployee[]
+  items     CustomerItem[]
+}
+
+/// Địa chỉ khách hàng
+model CustomerAddress {
+  id         String   @id @default(cuid())
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id])
+  label      String?
+  type       String   @default("office")
+  address    String
+  city       String?
+  state      String?
+  postalCode String?
+  country    String  @default("Việt Nam")
+  isDefault  Boolean @default(false)
+  employees  CustomerEmployee[]
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([customerId, address, type])
+}
+
+/// Người liên hệ
+model CustomerContact {
+  id         String   @id @default(cuid())
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id])
+  firstName  String
+  lastName   String
+  position   String?
+  department String?
+  phone      String?
+  email      String?
+  isPrimary  Boolean  @default(false)
+  note       String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+/// Nhân viên bên phía khách hàng
+model CustomerEmployee {
+  id         String   @id @default(cuid())
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id])
+  employeeId String?
+  employee   Users?   @relation(fields: [employeeId], references: [id])
+  firstName  String
+  lastName   String
+  code       String?
+  position   String?
+  department String?
+  phone      String?
+  email      String?
+  addressId  String?
+  address    CustomerAddress? @relation(fields: [addressId], references: [id])
+  workLocation String?
+  isActive   Boolean  @default(true)
+  note       String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+/// Liên kết khách hàng với hạng mục (polymorphic)
+model CustomerItem {
+  id         String   @id @default(cuid())
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id])
+  itemType   String
+  itemId     String
+  relation   String   @default("managed")
+  isPrimary  Boolean  @default(false)
+  note       String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([customerId, itemType, itemId])
+  @@index([itemType, itemId])
+}
+
+// CUSTOMER_END

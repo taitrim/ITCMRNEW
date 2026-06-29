@@ -1,7 +1,7 @@
 "use client";
 
 import { useSession } from "next-auth/react";
-import { redirect } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Search, Monitor, ChevronRight, SlidersHorizontal } from "lucide-react";
@@ -19,18 +19,28 @@ type AssetType = {
 };
 
 export default function AssetsPage() {
-  const { data: session } = useSession();
-  if (!session?.user) redirect("/login");
+  
+  const { data: session, status } = useSession();
 
+  const router = useRouter();
+
+  useEffect(() => {
+
+    if (status !== "loading" && !session?.user) router.replace("/login");
+
+  }, [status, session]);
   const [assets, setAssets] = useState<AssetType[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
   const [showFilter, setShowFilter] = useState(false);
-
   useEffect(() => {
+
     fetch("/api/assets").then(r => r.json()).then(d => { setAssets(d); setLoading(false); });
+
   }, []);
+
+  if (status === "loading") return <div className="flex items-center justify-center min-h-screen"><div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>;
 
   const filtered = assets.filter(a => {
     if (typeFilter && a.assetType !== typeFilter) return false;

@@ -16,9 +16,9 @@ export default async function UsersPage() {
   const session = await auth();
   if (!session?.user || session.user.role !== "admin") redirect("/login");
 
-  const users = await prisma.user.findMany({
-    where: { organizationId: session.user.organizationId! },
-    include: { location: { select: { name: true } }, _count: { select: { assignedTickets: true, assignedAssets: true } } },
+  const users = await prisma.users.findMany({
+    where: { entitiesId: session.user.organizationId!, isDeleted: false },
+    include: { locations: { select: { name: true } }, profiles: { select: { name: true } } },
     orderBy: { createdAt: "desc" },
   });
 
@@ -36,12 +36,12 @@ export default async function UsersPage() {
           <TBody>
             {users.map((u) => (
               <tr key={u.id} className="hover:bg-gray-50">
-                <Td className="font-medium text-gray-900">{u.name}</Td>
-                <Td className="text-muted-foreground">{u.email}</Td>
-                <Td><Badge variant={roleColors[u.role]}>{roleLabel[u.role]}</Badge></Td>
-                <Td className="text-muted-foreground">{u.location?.name || "-"}</Td>
-                <Td>{u._count.assignedTickets}</Td>
-                <Td>{u._count.assignedAssets}</Td>
+                <Td className="font-medium text-gray-900">{u.realname || u.name}</Td>
+                <Td className="text-muted-foreground">{u.name || "-"}</Td>
+                <Td><Badge variant={roleColors[u.profiles?.name || "user"]}>{roleLabel[u.profiles?.name || "user"]}</Badge></Td>
+                <Td className="text-muted-foreground">{u.locations?.name || "-"}</Td>
+                <Td>-</Td>
+                <Td>-</Td>
                 <Td><Badge variant={u.isActive ? "success" : "default"} size="sm">{u.isActive ? "Hoạt động" : "Vô hiệu"}</Badge></Td>
               </tr>
             ))}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useSession } from "next-auth/react";
-import { redirect } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Building2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -9,8 +9,16 @@ import { Badge } from "@/components/ui/badge";
 type Supplier = { id: string; name: string; supplierType: string; contactName: string | null; email: string | null; phone: string | null; _count: { contracts: number } };
 
 export default function SuppliersPage() {
-  const { data: session } = useSession();
-  if (!session?.user) redirect("/login");
+  
+  const { data: session, status } = useSession();
+
+  const router = useRouter();
+
+  useEffect(() => {
+
+    if (status !== "loading" && !session?.user) router.replace("/login");
+
+  }, [status, session]);
 
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [loading, setLoading] = useState(true);
@@ -18,6 +26,8 @@ export default function SuppliersPage() {
   useEffect(() => {
     fetch("/api/suppliers").then(r => r.json()).then(d => { setSuppliers(d); setLoading(false); }).catch(() => setLoading(false));
   }, []);
+
+  if (status === "loading") return <div className="flex items-center justify-center min-h-screen"><div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>;
 
   return (
     <div className="min-h-screen bg-surface-secondary/30 pb-4">

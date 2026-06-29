@@ -5,8 +5,9 @@ import { usePathname } from "next/navigation";
 import { signOut, useSession } from "next-auth/react";
 import {
   LayoutDashboard, Ticket, Kanban, Monitor, Box, KeyRound,
-  Printer, BookOpen, FileText, Building2, MapPin, Users,
+  Printer, BookOpen, FileText, Building2, Building, MapPin, Users,
   ChevronDown, LogOut, Settings, Wrench, AlertTriangle,
+  Globe, Shield, Wallet, FolderKanban, HardDrive,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
@@ -46,11 +47,24 @@ const nav: NavGroup[] = [
     ],
   },
   {
+    label: "Khách hàng",
+    items: [
+      { href: "/customers", label: "Khách hàng", icon: <Building2 size={18} /> },
+      { href: "/companies", label: "Công ty phụ trách", icon: <Building size={18} /> },
+      { href: "/customer-employees", label: "Nhân viên KH", icon: <Users size={18} /> },
+      { href: "/customer-devices", label: "Quản lý thiết bị", icon: <HardDrive size={18} /> },
+    ],
+  },
+  {
     label: "Dữ liệu",
     items: [
       { href: "/knowledge", label: "Kiến thức", icon: <BookOpen size={18} /> },
       { href: "/contracts", label: "Hợp đồng", icon: <FileText size={18} /> },
       { href: "/suppliers", label: "Nhà cung cấp", icon: <Building2 size={18} /> },
+      { href: "/domains", label: "Domain", icon: <Globe size={18} /> },
+      { href: "/certificates", label: "Chứng chỉ", icon: <Shield size={18} /> },
+      { href: "/budgets", label: "Ngân sách", icon: <Wallet size={18} /> },
+      { href: "/projects", label: "Dự án", icon: <FolderKanban size={18} /> },
       { href: "/locations", label: "Vị trí", icon: <MapPin size={18} /> },
     ],
   },
@@ -122,7 +136,7 @@ export function Sidebar() {
         >
           <ChevronDown size={16} className={cn("transition-transform", collapsed ? "rotate-90" : "-rotate-90")} />
         </button>
-        <div className={cn("flex items-center gap-2.5", collapsed && "justify-center")}>
+        <Link href="/profile" className={cn("flex items-center gap-2.5 rounded-lg transition-colors hover:bg-gray-50 -mx-1 px-2 py-1.5", collapsed && "justify-center")}>
           <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary to-primary-600 text-white flex items-center justify-center text-sm font-bold flex-shrink-0">
             {session?.user?.name?.[0]?.toUpperCase() || "U"}
           </div>
@@ -132,7 +146,7 @@ export function Sidebar() {
               <p className="text-[11px] text-muted-foreground capitalize">{session?.user?.role}</p>
             </div>
           )}
-        </div>
+        </Link>
         {!collapsed && (
           <button onClick={() => signOut({ callbackUrl: "/login" })}
             className="mt-2 w-full flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm text-gray-500 hover:bg-red-50 hover:text-red-600 transition-all"

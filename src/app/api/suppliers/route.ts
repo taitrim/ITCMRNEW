@@ -5,10 +5,18 @@ export async function GET() {
   const session = await auth();
   if (!session?.user) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
-  const suppliers = await prisma.supplier.findMany({
-    where: { organizationId: session.user.organizationId! },
-    include: { _count: { select: { contracts: true } } },
+  const items = await prisma.suppliers.findMany({
+    where: { entitiesId: session.user.organizationId!, isDeleted: false },
+    include: { suppliertypes: { select: { name: true } }, _count: { select: { contractSuppliers: true } } },
     orderBy: { name: "asc" },
   });
-  return Response.json(suppliers);
+  return Response.json(items.map(s => ({
+    id: s.id,
+    name: s.name || "",
+    supplierType: s.suppliertypes?.name || "general",
+    contactName: s.comment,
+    email: s.email,
+    phone: s.phonenumber,
+    _count: { contracts: s._count.contractSuppliers },
+  })));
 }

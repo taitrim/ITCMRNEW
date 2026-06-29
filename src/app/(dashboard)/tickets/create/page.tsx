@@ -20,7 +20,7 @@ const schema = z.object({
 type FormData = z.infer<typeof schema>;
 
 export default function CreateTicketPage() {
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
   const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -30,14 +30,16 @@ export default function CreateTicketPage() {
     defaultValues: { type: "incident", priority: "medium" },
   });
 
+  if (status === "loading") return <div className="flex items-center justify-center min-h-screen"><div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>;
   if (!session?.user) redirect("/login");
 
   const onSubmit = async (data: FormData) => {
     setSubmitting(true); setError("");
     try {
+      const priorityMap: Record<string, number> = { low: 1, medium: 3, high: 4, urgent: 5, critical: 6 };
       const res = await fetch("/api/tickets", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
+        body: JSON.stringify({ name: data.title, content: data.description, type: data.type, priority: priorityMap[data.priority] || 3, categoryId: data.categoryId }),
       });
       if (!res.ok) throw new Error("Failed to create");
       const ticket = await res.json();

@@ -10,6 +10,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   const { id } = await params;
   const body = await req.json();
-  const user = await prisma.user.update({ where: { id }, data: body });
+  const data: Record<string, unknown> = {};
+  if (body.name) data.name = body.name;
+  if (body.realname) data.realname = body.realname;
+  if (body.isActive !== undefined) data.isActive = body.isActive ? 1 : 0;
+
+  const user = await prisma.users.update({ where: { id }, data });
   return Response.json(user);
 }

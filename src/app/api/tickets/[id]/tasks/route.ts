@@ -8,8 +8,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const { id } = await params;
   const body = await req.json();
-  const task = await prisma.ticketTask.create({
-    data: { ticketId: id, content: body.content, state: "todo", userId: session.user.id! },
+  const task = await prisma.tickettasks.create({
+    data: { ticketsId: id, content: body.content, state: 0, usersId: session.user.id! },
   });
   return Response.json(task, { status: 201 });
 }

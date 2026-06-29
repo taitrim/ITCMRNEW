@@ -9,9 +9,12 @@ export default async function ChangesPage() {
   const session = await auth();
   if (!session?.user) redirect("/login");
 
-  const changes = await prisma.change.findMany({
-    where: { organizationId: session.user.organizationId! },
-    include: { assignedTo: { select: { name: true } }, category: { select: { name: true, color: true } } },
+  const changes = await prisma.changes.findMany({
+    where: { entitiesId: session.user.organizationId!, isDeleted: false },
+    include: {
+      changeUsers: { include: { users: { select: { name: true } } }, where: { type: 1 } },
+      itilcategories: { select: { name: true } },
+    },
     orderBy: { createdAt: "desc" },
   });
 
@@ -33,15 +36,13 @@ export default async function ChangesPage() {
               <CardContent className="flex items-start justify-between py-4">
                 <div>
                   <div className="flex items-center gap-2">
-                    <h3 className="font-medium text-gray-900">{c.title}</h3>
-                    <Badge>{c.status}</Badge>
-                    <Badge variant="warning" size="sm">{c.risk}</Badge>
+                    <h3 className="font-medium text-gray-900">{c.name}</h3>
+                    <Badge>#{c.status}</Badge>
                   </div>
-                  <p className="text-sm text-muted-foreground mt-1">{c.description?.slice(0, 120)}...</p>
+                  <p className="text-sm text-muted-foreground mt-1">{c.content?.slice(0, 120)}...</p>
                   <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
-                    {c.assignedTo && <span>{c.assignedTo.name}</span>}
-                    {c.plannedStart && <span>Bắt đầu: {new Date(c.plannedStart).toLocaleDateString("vi-VN")}</span>}
-                    {c.plannedEnd && <span>Kết thúc: {new Date(c.plannedEnd).toLocaleDateString("vi-VN")}</span>}
+                    {c.changeUsers?.[0]?.users && <span>{c.changeUsers[0].users.name}</span>}
+                    {c.itilcategories && <span>{c.itilcategories.name}</span>}
                   </div>
                 </div>
               </CardContent>

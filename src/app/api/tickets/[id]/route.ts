@@ -7,20 +7,33 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   if (!session?.user) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
   const { id } = await params;
-  const ticket = await prisma.ticket.findUnique({
+  const ticket = await prisma.tickets.findUnique({
     where: { id },
     include: {
-      assignedTo: { select: { name: true, email: true } },
-      createdBy: { select: { name: true } },
-      category: true,
-      followups: { include: { user: { select: { name: true } } }, orderBy: { createdAt: "desc" } },
-      tasks: { orderBy: { createdAt: "asc" } },
+      itilcategories: true,
+      ticketUsers: { include: { users: { select: { name: true } } } },
+      itilfollowups: { where: { itemtype: "Ticket" }, include: { users: { select: { name: true } } }, orderBy: { createdAt: "desc" as const } },
+      tickettasks: { include: { users: { select: { name: true } } }, orderBy: { createdAt: "asc" as const } },
     },
   });
-  if (!ticket || ticket.organizationId !== session.user.organizationId) {
+  if (!ticket || ticket.entitiesId !== session.user.organizationId) {
     return Response.json({ error: "Not found" }, { status: 404 });
   }
-  return Response.json(ticket);
+
+  const mapped = {
+    ...ticket,
+    category: ticket.itilcategories,
+    assignedTo: ticket.ticketUsers?.find((u) => u.type === 2)?.users || null,
+    createdBy: ticket.ticketUsers?.find((u) => u.type === 1)?.users || null,
+    followups: ticket.itilfollowups,
+    tasks: ticket.tickettasks,
+    itilcategories: undefined,
+    ticketUsers: undefined,
+    itilfollowups: undefined,
+    tickettasks: undefined,
+  };
+
+  return Response.json(mapped);
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -29,6 +42,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   const { id } = await params;
   const body = await req.json();
-  const ticket = await prisma.ticket.update({ where: { id }, data: body });
+  const data: Record<string, unknown> = {};
+  if (body.name) data.name = body.name;
+  if (body.content) data.content = body.content;
+  if (body.status !== undefined) data.status = body.status;
+  if (body.priority !== undefined) data.priority = body.priority;
+
+  const ticket = await prisma.tickets.update({ where: { id }, data });
   return Response.json(ticket);
 }

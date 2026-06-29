@@ -8,6 +8,6 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   const { id } = await params;
   const body = await req.json();
-  const task = await prisma.ticketTask.update({ where: { id }, data: body });
+  const task = await prisma.tickettasks.update({ where: { id }, data: body });
   return Response.json(task);
 }

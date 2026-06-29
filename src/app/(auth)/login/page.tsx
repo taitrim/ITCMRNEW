@@ -3,13 +3,11 @@
 import { useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { Monitor, Eye, EyeOff } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Eye, EyeOff, Server } from "lucide-react";
 
 export default function LoginPage() {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [username, setUsername] = useState("admin");
+  const [password, setPassword] = useState("admin123");
   const [show, setShow] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -18,9 +16,9 @@ export default function LoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true); setError("");
-    const res = await signIn("credentials", { email, password, redirect: false });
+    const res = await signIn("credentials", { email: username, password, redirect: false });
     if (res?.error) {
-      setError("Email hoặc mật khẩu không đúng");
+      setError("Tên đăng nhập hoặc mật khẩu không đúng");
       setLoading(false);
     } else {
       router.push("/dashboard");
@@ -28,57 +26,62 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-gray-50 to-primary-50/30 p-4">
-      <div className="w-full max-w-sm animate-in">
-        <div className="flex items-center gap-3 justify-center mb-8">
-          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary to-primary-600 flex items-center justify-center text-white font-bold text-xl shadow-lg shadow-primary/20">
-            I
-          </div>
-          <div>
-            <h1 className="text-xl font-bold text-gray-900">ITSM System</h1>
-            <p className="text-xs text-muted-foreground">GLPI-compatible</p>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-2xl shadow-xl border border-border p-6 space-y-5">
-          <div>
-            <h2 className="text-lg font-semibold text-gray-900">Đăng nhập</h2>
-            <p className="text-sm text-muted-foreground mt-0.5">Nhập thông tin tài khoản</p>
+    <div className="min-h-screen flex flex-col bg-white">
+      <div className="flex-1 flex flex-col items-center justify-center px-6">
+        <div className="w-full max-w-sm animate-in-up">
+          <div className="flex flex-col items-center mb-8">
+            <div className="w-16 h-16 rounded-2xl bg-primary flex items-center justify-center text-white font-bold text-2xl shadow-lg shadow-primary/30 mb-4">
+              <Server size={32} />
+            </div>
+            <h1 className="text-2xl font-bold text-gray-900">ITSM System</h1>
+            <p className="text-sm text-muted-foreground mt-1">GLPI-compatible</p>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <Input label="Email" id="email" type="email" value={email}
-              onChange={(e) => setEmail(e.target.value)} placeholder="admin@demo.com" required />
+          <form onSubmit={handleSubmit} className="space-y-5">
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-gray-700">Tên đăng nhập</label>
+              <input type="text" value={username} onChange={(e) => setUsername(e.target.value)}
+                className="w-full h-12 rounded-xl border border-border bg-gray-50 px-4 text-sm focus:outline-hidden focus:border-primary focus:ring-2 focus:ring-primary/20 focus:bg-white transition-all"
+                placeholder="admin" required />
+            </div>
 
             <div className="space-y-1.5">
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700">Mật khẩu</label>
+              <label className="text-sm font-medium text-gray-700">Mật khẩu</label>
               <div className="relative">
-                <input id="password" type={show ? "text" : "password"} value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full rounded-lg border border-border bg-white px-3.5 py-2.5 pr-10 text-sm text-gray-900
-                    focus:outline-hidden focus:border-primary focus:ring-2 focus:ring-primary/20"
+                <input type={show ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)}
+                  className="w-full h-12 rounded-xl border border-border bg-gray-50 px-4 pr-11 text-sm focus:outline-hidden focus:border-primary focus:ring-2 focus:ring-primary/20 focus:bg-white transition-all"
                   placeholder="••••••••" required />
                 <button type="button" onClick={() => setShow(!show)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
-                  {show ? <EyeOff size={16} /> : <Eye size={16} />}
+                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                  {show ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
               </div>
             </div>
 
             {error && (
-              <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">
-                <Monitor size={14} /> {error}
+              <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 rounded-xl px-4 py-3">
+                <Server size={16} /> {error}
               </div>
             )}
 
-            <Button type="submit" loading={loading} className="w-full">Đăng nhập</Button>
+            <button type="submit" disabled={loading}
+              className="w-full h-12 rounded-xl bg-primary text-white font-semibold text-base hover:bg-primary-600 active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-primary/20"
+            >
+              {loading && <span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />}
+              Đăng nhập
+            </button>
           </form>
 
-          <div className="text-center text-xs text-muted-foreground">
-            <p>Demo: admin@demo.com / admin123</p>
+          <div className="mt-8 text-center">
+            <div className="bg-gray-50 rounded-xl px-4 py-3 space-y-1">
+              <p className="text-xs font-medium text-gray-700">Tài khoản demo</p>
+              <p className="text-xs text-muted-foreground">admin / admin123</p>
+              <p className="text-xs text-muted-foreground">tech / admin123 &nbsp;•&nbsp; user / admin123</p>
+            </div>
           </div>
         </div>
       </div>
+      <p className="text-center text-[10px] text-muted-foreground pb-6">ITSM System v1.0 • Built with Next.js</p>
     </div>
   );
 }

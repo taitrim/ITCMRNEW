@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut, useSession } from "next-auth/react";
-import { X, LayoutDashboard, Ticket, Kanban, Monitor, Box, KeyRound, Printer, BookOpen, FileText, Building2, MapPin, Users, Settings, Wrench, AlertTriangle, LogOut, ChevronRight } from "lucide-react";
+import { X, LayoutDashboard, Ticket, Kanban, Monitor, Box, KeyRound, Printer, BookOpen, FileText, Building2, MapPin, Users, Settings, Wrench, AlertTriangle, LogOut, ChevronRight, Globe, Shield, Wallet, FolderKanban } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface DrawerProps {
@@ -26,10 +26,17 @@ const groups = [
     { href: "/assets/licenses", label: "Bản quyền", icon: KeyRound },
     { href: "/assets/consumables", label: "Vật tư", icon: Printer },
   ]},
+  { label: "Khách hàng", items: [
+    { href: "/customers", label: "Khách hàng", icon: Building2 },
+  ]},
   { label: "Dữ liệu", items: [
     { href: "/knowledge", label: "Kiến thức", icon: BookOpen },
     { href: "/contracts", label: "Hợp đồng", icon: FileText },
     { href: "/suppliers", label: "Nhà cung cấp", icon: Building2 },
+    { href: "/domains", label: "Domain", icon: Globe },
+    { href: "/certificates", label: "Chứng chỉ", icon: Shield },
+    { href: "/budgets", label: "Ngân sách", icon: Wallet },
+    { href: "/projects", label: "Dự án", icon: FolderKanban },
     { href: "/locations", label: "Vị trí", icon: MapPin },
   ]},
   { label: "Quản trị", items: [

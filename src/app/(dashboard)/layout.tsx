@@ -7,7 +7,7 @@ import { MobileHeader } from "@/components/mobile/mobile-header";
 import { Drawer } from "@/components/mobile/drawer";
 import { BottomSheet } from "@/components/mobile/bottom-sheet";
 import { useRouter } from "next/navigation";
-import { Ticket, Monitor } from "lucide-react";
+import { Ticket, Monitor, Building2 } from "lucide-react";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -36,6 +36,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <div className="text-left">
               <p className="font-medium text-gray-900">Ticket mới</p>
               <p className="text-xs text-muted-foreground">Tạo yêu cầu hỗ trợ hoặc báo sự cố</p>
+            </div>
+          </button>
+          <button onClick={() => { setSheetOpen(false); router.push("/customers/create"); }}
+            className="w-full flex items-center gap-4 p-4 rounded-xl hover:bg-gray-50 transition-colors"
+          >
+            <div className="w-12 h-12 rounded-xl bg-amber-50 flex items-center justify-center">
+              <Building2 size={24} className="text-amber-600" />
+            </div>
+            <div className="text-left">
+              <p className="font-medium text-gray-900">Khách hàng mới</p>
+              <p className="text-xs text-muted-foreground">Thêm khách hàng hoặc doanh nghiệp</p>
             </div>
           </button>
           <button onClick={() => { setSheetOpen(false); router.push("/assets") }}

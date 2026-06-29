@@ -5,9 +5,9 @@ export async function GET() {
   const session = await auth();
   if (!session?.user) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
-  const articles = await prisma.knowledgeBaseArticle.findMany({
-    where: { organizationId: session.user.organizationId! },
+  const items = await prisma.knowbaseitems.findMany({
+    where: { entitiesId: session.user.organizationId! },
     orderBy: { createdAt: "desc" },
   });
-  return Response.json(articles);
+  return Response.json(items);
 }

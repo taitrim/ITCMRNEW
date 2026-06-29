@@ -1,7 +1,7 @@
 "use client";
 
 import { useSession } from "next-auth/react";
-import { redirect } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Search, Plus, Filter, Ticket, AlertCircle, MessageSquare, User, ChevronRight, SlidersHorizontal } from "lucide-react";
@@ -32,8 +32,16 @@ const filterTabs = [
 ];
 
 export default function TicketsPage() {
-  const { data: session } = useSession();
-  if (!session?.user) redirect("/login");
+  
+  const { data: session, status } = useSession();
+
+  const router = useRouter();
+
+  useEffect(() => {
+
+    if (status !== "loading" && !session?.user) router.replace("/login");
+
+  }, [status, session]);
 
   const [tickets, setTickets] = useState<TicketType[]>([]);
   const [loading, setLoading] = useState(true);
@@ -46,9 +54,11 @@ export default function TicketsPage() {
     fetch("/api/tickets").then(r => r.json()).then(d => { setTickets(d); setLoading(false); });
   }, []);
 
+  if (status === "loading") return <div className="flex items-center justify-center min-h-screen"><div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>;
+
   const filtered = tickets.filter((t) => {
     if (filter === "open") return !["resolved", "closed"].includes(t.status);
-    if (filter === "my") return t.assignedTo?.name === session.user.name;
+    if (filter === "my") return t.assignedTo?.name === session?.user?.name;
     if (filter === "resolved") return ["resolved", "closed"].includes(t.status);
     return true;
   }).filter((t) => {

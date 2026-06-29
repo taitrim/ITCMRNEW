@@ -1,7 +1,7 @@
 "use client";
 
 import { useSession } from "next-auth/react";
-import { redirect } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Box, Code, Monitor } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -10,8 +10,16 @@ import { Card, CardContent } from "@/components/ui/card";
 type Agent = { id: string; name: string; deviceId: string; lastContact: string | null; lastIp: string | null; isActive: boolean; _count: { inventories: number } };
 
 export default function InventoryPage() {
-  const { data: session } = useSession();
-  if (!session?.user) redirect("/login");
+  
+  const { data: session, status } = useSession();
+
+  const router = useRouter();
+
+  useEffect(() => {
+
+    if (status !== "loading" && !session?.user) router.replace("/login");
+
+  }, [status, session]);
 
   const [agents, setAgents] = useState<Agent[]>([]);
   const [dynamicAssets, setDynamicAssets] = useState(0);
@@ -20,6 +28,8 @@ export default function InventoryPage() {
   useEffect(() => {
     fetch("/api/agent/inventory/list").then(r => r.json()).then(d => { setAgents(d.agents); setDynamicAssets(d.dynamicAssets); setLoading(false); }).catch(() => setLoading(false));
   }, []);
+
+  if (status === "loading") return <div className="flex items-center justify-center min-h-screen"><div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>;
 
   return (
     <div className="min-h-screen bg-surface-secondary/30 pb-4">

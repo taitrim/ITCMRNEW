@@ -8,8 +8,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const { id } = await params;
   const body = await req.json();
-  const followup = await prisma.ticketFollowup.create({
-    data: { ticketId: id, content: body.content, isPrivate: body.isPrivate || false, userId: session.user.id! },
+  const followup = await prisma.itilfollowups.create({
+    data: { itemtype: "Ticket", itemsId: 1, content: body.content, isPrivate: body.isPrivate || 0, usersId: session.user.id! },
   });
   return Response.json(followup, { status: 201 });
 }

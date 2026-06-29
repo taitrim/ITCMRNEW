@@ -1,7 +1,7 @@
 "use client";
 
 import { useSession } from "next-auth/react";
-import { redirect, useParams } from "next/navigation";
+import { useRouter, useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -28,8 +28,16 @@ type TicketData = {
 };
 
 export default function TicketDetailPage() {
-  const { data: session } = useSession();
-  if (!session?.user) redirect("/login");
+  
+  const { data: session, status } = useSession();
+
+  const router = useRouter();
+
+  useEffect(() => {
+
+    if (status !== "loading" && !session?.user) router.replace("/login");
+
+  }, [status, session]);
 
   const params = useParams();
   const [ticket, setTicket] = useState<TicketData | null>(null);
@@ -44,6 +52,8 @@ export default function TicketDetailPage() {
       setTicket(d); setLoading(false);
     });
   }, [params.id]);
+
+  if (status === "loading") return <div className="flex items-center justify-center min-h-screen"><div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>;
 
   const updateStatus = async (status: string) => {
     const res = await fetch(`/api/tickets/${params.id}`, {
@@ -62,7 +72,7 @@ export default function TicketDetailPage() {
     });
     if (res.ok) {
       const f = await res.json();
-      setTicket(prev => prev ? { ...prev, followups: [{ ...f, user: { name: session.user.name || "" } }, ...prev.followups] } : prev);
+      setTicket(prev => prev ? { ...prev, followups: [{ ...f, user: { name: session?.user?.name || "" } }, ...prev.followups] } : prev);
       setFollowupText("");
     }
     setSending(false);

@@ -5,10 +5,31 @@ export async function GET() {
   const session = await auth();
   if (!session?.user) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
-  const assets = await prisma.asset.findMany({
-    where: { organizationId: session.user.organizationId!, isActive: true },
-    include: { location: true, assignedTo: { select: { name: true } }, manufacturer: { select: { name: true } } },
-    orderBy: { createdAt: "desc" },
-  });
-  return Response.json(assets);
+  const [computers, monitors, printers, network] = await Promise.all([
+    prisma.computers.findMany({
+      where: { entitiesId: session.user.organizationId! },
+      include: { manufacturers: { select: { name: true } }, locations: { select: { name: true } }, users: { select: { name: true } } },
+    }),
+    prisma.monitors.findMany({
+      where: { entitiesId: session.user.organizationId! },
+      include: { manufacturers: { select: { name: true } }, locations: { select: { name: true } }, users: { select: { name: true } } },
+    }),
+    prisma.printers.findMany({
+      where: { entitiesId: session.user.organizationId! },
+      include: { manufacturers: { select: { name: true } }, locations: { select: { name: true } } },
+    }),
+    prisma.networkequipments.findMany({
+      where: { entitiesId: session.user.organizationId! },
+      include: { manufacturers: { select: { name: true } }, locations: { select: { name: true } } },
+    }),
+  ]);
+
+  const mapped = [
+    ...computers.map((c) => ({ ...c, assetType: "computer", assignedTo: c.users, manufacturer: c.manufacturers, location: c.locations, manufacturers: undefined, users: undefined, locations: undefined })),
+    ...monitors.map((m) => ({ ...m, assetType: "monitor", assignedTo: m.users, manufacturer: m.manufacturers, location: m.locations, manufacturers: undefined, users: undefined, locations: undefined })),
+    ...printers.map((p) => ({ ...p, assetType: "printer", assignedTo: null, manufacturer: p.manufacturers, location: p.locations, manufacturers: undefined, locations: undefined })),
+    ...network.map((n) => ({ ...n, assetType: "network", assignedTo: null, manufacturer: n.manufacturers, location: n.locations, manufacturers: undefined, locations: undefined })),
+  ];
+
+  return Response.json(mapped);
 }

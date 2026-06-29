@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Ticket, Monitor, Plus, Menu as MenuIcon } from "lucide-react";
+import { LayoutDashboard, Ticket, Monitor, Plus, Menu as MenuIcon, Building2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const tabs = [
   { href: "/dashboard", label: "Trang chủ", icon: LayoutDashboard },
   { href: "/tickets", label: "Ticket", icon: Ticket },
   { href: null, label: "Tạo", icon: Plus, isAction: true },
+  { href: "/customers", label: "KH", icon: Building2 },
   { href: "/assets", label: "Tài sản", icon: Monitor },
   { href: null, label: "Menu", icon: MenuIcon, isMenu: true },
 ];

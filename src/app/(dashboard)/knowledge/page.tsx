@@ -1,7 +1,7 @@
 "use client";
 
 import { useSession } from "next-auth/react";
-import { redirect } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Search, BookOpen } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -11,8 +11,16 @@ type Article = { id: string; title: string; content: string; category: string | 
 const categoryColors: Record<string, any> = { software: "primary", hardware: "warning", network: "info", general: "default" };
 
 export default function KnowledgePage() {
-  const { data: session } = useSession();
-  if (!session?.user) redirect("/login");
+  
+  const { data: session, status } = useSession();
+
+  const router = useRouter();
+
+  useEffect(() => {
+
+    if (status !== "loading" && !session?.user) router.replace("/login");
+
+  }, [status, session]);
 
   const [articles, setArticles] = useState<Article[]>([]);
   const [loading, setLoading] = useState(true);
@@ -22,6 +30,8 @@ export default function KnowledgePage() {
   useEffect(() => {
     fetch("/api/knowledge").then(r => r.json()).then(d => { setArticles(d); setLoading(false); }).catch(() => setLoading(false));
   }, []);
+
+  if (status === "loading") return <div className="flex items-center justify-center min-h-screen"><div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>;
 
   const filtered = articles.filter(a => {
     if (cat && a.category !== cat) return false;
