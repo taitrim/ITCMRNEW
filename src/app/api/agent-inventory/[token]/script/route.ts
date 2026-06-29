@@ -4,8 +4,8 @@ import { prisma } from "@/lib/db";
  *
  * Script .bat sẽ:
  *   1. Tải GLPI Agent portable (có cache — không tải lại nếu đã có)
- *   2. Chạy GLPI Agent với --server URL (agent tự động POST lên CRM)
- *   3. Agent append /plugins/fusioninventory/ vào URL — catch-all route xử lý
+ *   2. Chạy GLPI Agent với --local output_dir --json (inventory → file JSON)
+ *   3. curl POST file JSON lên CRM API
  *
  * Ưu điểm GLPI Agent:
  *   - Phát hiện chính xác PC/Laptop/AIO (chassis type)
@@ -95,32 +95,35 @@ if not defined AGENT_EXE (
 )
 echo OK.
 
-:: === Buoc 2: Chay GLPI Agent (POST truc tiep len CRM) ===
+:: === Buoc 2: Chay GLPI Agent (local → JSON) ===
 :run_agent
 echo.
-echo [2/3] Dang thu thap va gui thong tin len CRM...
-echo Server: %CRM_URL%
+echo [2/3] Dang thu thap thong tin...
 
-:: GLPI Agent tu dong append /plugins/fusioninventory/ vao URL
-:: CRM da co catch-all route xu ly path nay
-echo Dang chay: !AGENT_EXE!
-echo.
+set "OUTPUT_DIR=%TEMP_DIR%\\output"
+if exist "%OUTPUT_DIR%" rmdir /s /q "%OUTPUT_DIR%" >nul 2>&1
+mkdir "%OUTPUT_DIR%" >nul 2>&1
+
+echo Dang chay GLPI Agent...
 cd /d "%~dp0"
-"!AGENT_EXE!" --server "%CRM_URL%" --json --no-ssl-check --logfile agent-log.txt
+"!AGENT_EXE!" --local "%OUTPUT_DIR%" --json --no-ssl-check --logfile agent-log.txt
 set "EXIT_CODE=%ERRORLEVEL%"
 
-echo.
-if "!EXIT_CODE!"=="0" (
-    echo ============================================
-    echo   Hoan thanh! Vao phan mem CRM de xem ket qua.
-    echo ============================================
+:: Tim file JSON output
+set "JSON_FILE="
+for /f "delims=" %%f in ('dir /s /b "%OUTPUT_DIR%\\*.json" 2^>nul') do set "JSON_FILE=%%f"
+
+if defined JSON_FILE (
+    echo Da thu thap xong: !JSON_FILE!
+    echo.
+    echo [3/3] Dang gui du lieu len CRM...
+    curl -X POST -H "Content-Type: application/json" -d @"!JSON_FILE!" "%CRM_URL%"
+    echo.
+    echo Hoan thanh!
 ) else (
-    echo [LOI] GLPI Agent thoat voi ma loi !EXIT_CODE!.
+    echo [LOI] Khong tim thay file JSON tu GLPI Agent.
     echo Kiem tra log:
     if exist agent-log.txt type agent-log.txt
-    echo.
-    echo Ban co the gui thu cong:
-    echo   curl -X POST -H "Content-Type: application/json" -d @inventory.json "%CRM_URL%"
 )
 
 if exist agent-log.txt del agent-log.txt >nul 2>&1
