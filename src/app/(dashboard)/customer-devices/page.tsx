@@ -7,11 +7,13 @@ import { cn } from "@/lib/utils";
 
 const DEVICE_ICONS: Record<string, string> = {
   computer: "💻", monitor: "🖥️", printer: "🖨️", network: "🌐", phone: "📱",
-  peripheral: "🎮", server: "🖥️", other: "📦",
+  peripheral: "🎮", server: "🗄️", other: "📦",
+  desktop: "🖥️", laptop: "💻", aio: "🖥️", tablet: "📱",
 };
 const DEVICE_LABELS: Record<string, string> = {
   computer: "Máy tính", monitor: "Màn hình", printer: "Máy in", network: "Mạng",
   phone: "Điện thoại", peripheral: "Ngoại vi", server: "Máy chủ", other: "Khác",
+  desktop: "Desktop", laptop: "Laptop", aio: "AIO", tablet: "Tablet",
 };
 const STATUS_LABELS: Record<string, string> = {
   active: "Đang dùng", broken: "Hỏng", stored: "Lưu kho", retired: "Thanh lý",
