@@ -102,21 +102,25 @@ echo [2/3] Dang thu thap thong tin...
 
 :: Dung absolute path de tranh loi working directory
 set "BASE_DIR=%~dp0"
-set "OUTPUT_DIR=%BASE_DIR%%TEMP_DIR%\\output"
-if exist "%OUTPUT_DIR%" rmdir /s /q "%OUTPUT_DIR%" >nul 2>&1
-mkdir "%OUTPUT_DIR%" >nul 2>&1
+set "OUTPUT_PARENT=%BASE_DIR%%TEMP_DIR%\\output"
+if not exist "%OUTPUT_PARENT%" mkdir "%OUTPUT_PARENT%" >nul 2>&1
 
 echo Dang chay GLPI Agent (co the mat ~1 phut)...
 cd /d "%BASE_DIR%"
-"!AGENT_EXE!" --local "%OUTPUT_DIR%" --json --full --no-ssl-check --logfile agent-log.txt
+"!AGENT_EXE!" --local "%OUTPUT_PARENT%" --json --full --no-ssl-check --logfile agent-log.txt
 set "EXIT_CODE=%ERRORLEVEL%"
 
 :: Doi mot chut de agent ghi file xong
 ping -n 3 127.0.0.1 >nul 2>&1
 
-:: Tim file JSON output
+:: --full tao 1 file duy nhat (no extension) trong output parent dir
+:: Tim file JSON/test cac kieu: *.json, hoac file khong co extension
 set "JSON_FILE="
-for /f "delims=" %%f in ('dir /s /b "%OUTPUT_DIR%\\*.json" 2^>nul') do set "JSON_FILE=%%f"
+for /f "delims=" %%f in ('dir /b "%OUTPUT_PARENT%\\*.json" 2^>nul') do set "JSON_FILE=%OUTPUT_PARENT%\\%%f"
+if not defined JSON_FILE (
+    :: --full co the tao file khong co extension (ten giong dir name)
+    for /f "delims=" %%f in ('dir /b /a-d "%OUTPUT_PARENT%" 2^>nul') do set "JSON_FILE=%OUTPUT_PARENT%\\%%f"
+)
 
 if defined JSON_FILE (
     echo Da thu thap xong: !JSON_FILE!
