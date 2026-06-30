@@ -105,6 +105,7 @@ function OverviewSection({ c }: { c: Components }) {
   const totalDiskMb = c.storages?.reduce((s, d) => s + (d.disksize || 0), 0) || 0;
   const populatedSlots = c.memories?.filter(m => m.capacity && m.capacity > 0).length || 0;
   const totalSlots = c.memories?.length || 0;
+  const lastUser = c.hardware?.lastloggeduser;
 
   return (
     <SectionCard icon="📊" title="Tổng quan">
@@ -121,6 +122,16 @@ function OverviewSection({ c }: { c: Components }) {
               {c.hardware.vmsystem}
             </span>
           )}
+        </div>
+      )}
+      {/* Windows logged-in user — prominent display */}
+      {lastUser && (
+        <div className="mb-2 flex items-center gap-2 px-2 py-1.5 bg-sky-50 rounded-lg">
+          <span className="text-base">👤</span>
+          <div>
+            <div className="text-[9px] text-sky-500 uppercase tracking-wider font-medium">User đăng nhập Windows</div>
+            <div className="text-[12px] text-sky-800 font-bold">{lastUser}</div>
+          </div>
         </div>
       )}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2">

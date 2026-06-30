@@ -258,8 +258,13 @@ export default function DeviceDetailPage() {
 
   // Extract form factor from componentsJson
   let formFactor: string | null = null;
+  let lastLoggedUser: string | null = null;
   if (d.componentsJson) {
-    try { const comp = JSON.parse(d.componentsJson); formFactor = comp.formFactor || null; } catch {}
+    try {
+      const comp = JSON.parse(d.componentsJson);
+      formFactor = comp.formFactor || null;
+      lastLoggedUser = comp.hardware?.lastloggeduser || null;
+    } catch {}
   }
 
   return (
@@ -306,6 +311,17 @@ export default function DeviceDetailPage() {
             </div>
           </div>
         </div>
+
+        {/* Windows logged-in user badge */}
+        {lastLoggedUser && (
+          <div className="bg-white rounded-xl px-4 py-3 shadow-xs border border-border flex items-center gap-3">
+            <div className="w-8 h-8 rounded-full bg-sky-100 flex items-center justify-center text-sm flex-shrink-0">👤</div>
+            <div>
+              <div className="text-[10px] text-gray-400 font-medium uppercase tracking-wider">User đăng nhập Windows</div>
+              <div className="text-sm font-semibold text-gray-800">{lastLoggedUser}</div>
+            </div>
+          </div>
+        )}
 
         {/* 3-column grid: Customer / Assignment / Collection */}
         <div className="grid gap-4 md:grid-cols-3">
