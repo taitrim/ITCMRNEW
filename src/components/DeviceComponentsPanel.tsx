@@ -15,7 +15,7 @@ interface StorageEntry { model?: string; disksize?: number; interface?: string; 
 interface DriveEntry { letter?: string; label?: string; filesystem?: string; total?: number; free?: number; serial?: string; encrypt_status?: string; systemdrive?: boolean; }
 interface VideoEntry { name?: string; chipset?: string; memory?: number; resolution?: string; pcislot?: string; }
 interface MonitorEntry { caption?: string; manufacturer?: string; serial?: string; }
-interface NetworkEntry { description?: string; mac?: string; ipaddress?: string; ipmask?: string; ipgateway?: string; ipdhcp?: string; ipsubnet?: string; speed?: string; status?: string; type?: string; virtualdev?: boolean; }
+interface NetworkEntry { description?: string; mac?: string; ipaddress?: string; ipmask?: string; ipgateway?: string; ipdhcp?: string; ipsubnet?: string; speed?: string; status?: string; type?: string; virtualdev?: boolean; pciid?: string; pnpdeviceid?: string; }
 interface SoftwareEntry { name?: string; version?: string; publisher?: string; }
 interface PrinterEntry { name?: string; driver?: string; port?: string; network?: boolean; shared?: boolean; status?: string; resolution?: string; }
 interface AntivirusEntry { name?: string; company?: string; enabled?: boolean; uptodate?: boolean; base_version?: string; }

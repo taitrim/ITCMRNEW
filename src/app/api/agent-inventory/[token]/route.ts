@@ -93,7 +93,11 @@ function parseFlatInventory(content: Record<string, any>, deviceId: string): Dev
   const modelName = bios.smodel || bios.mmodel || "";
 
   // === IP & MAC from first active network interface ===
-  const activeNet = nets.find((n: any) => n.status === "up" && (n.ipaddress || n.ip)) || nets[0] || {};
+  // Best active network — prefer IPv4 (not IPv6) and physical (not virtual)
+  const activeNet = nets.find((n: any) => n.status === "up" && n.ipaddress && !n.virtualdev)
+    || nets.find((n: any) => n.status === "up" && n.ipaddress)
+    || nets.find((n: any) => n.status === "up" && n.ip)
+    || nets[0] || {};
 
   // ========================================================
   // Build componentsJson — ALL detail for device detail page
@@ -214,11 +218,27 @@ function parseFlatInventory(content: Record<string, any>, deviceId: string): Dev
     serial: m.serial || m.serial_number || "",
   }));
 
-  // --- Network adapters (ipaddress, mac, speed, status, type, virtualdev) ---
-  components.networks = nets.map((n: any) => ({
+  // --- Network adapters — dedup by MAC address ---
+  // GLPI Agent --full outputs one entry per IP address, so a single physical NIC
+  // with IPv4 + multiple IPv6 addresses appears multiple times with the same MAC.
+  // Merge: 1 entry per unique MAC, collect all IP addresses.
+  const nicByMac = new Map<string, { n: any; ips: string[] }>();
+  for (const n of nets as any[]) {
+    const mac = (n.mac || n.mac_address || "").toLowerCase().trim();
+    if (!mac) continue;  // skip entries without MAC (VPN adapters etc.)
+    const ip = n.ipaddress || n.ip_address || n.ip || n.ipaddress6 || "";
+    if (nicByMac.has(mac)) {
+      // Merge IPs — avoid duplicates
+      const existing = nicByMac.get(mac)!;
+      if (ip && !existing.ips.includes(ip)) existing.ips.push(ip);
+    } else {
+      nicByMac.set(mac, { n, ips: ip ? [ip] : [] });
+    }
+  }
+  components.networks = Array.from(nicByMac.entries()).map(([mac, { n, ips }]) => ({
     description: n.description || n.name || "",
-    mac: n.mac || n.mac_address || "",
-    ipaddress: n.ipaddress || n.ip_address || n.ip || "",
+    mac,
+    ipaddress: ips.join(", "),
     ipmask: n.ipmask || "",
     ipgateway: n.ipgateway || "",
     ipdhcp: n.ipdhcp || "",
@@ -227,6 +247,8 @@ function parseFlatInventory(content: Record<string, any>, deviceId: string): Dev
     status: n.status || "",
     type: n.type || "",
     virtualdev: n.virtualdev || false,
+    pciid: n.pciid || "",
+    pnpdeviceid: n.pnpdeviceid || "",
   }));
 
   // --- Software ---
@@ -336,27 +358,10 @@ function parseFlatInventory(content: Record<string, any>, deviceId: string): Dev
     componentsJson,
   });
 
-  // Additional active network interfaces as separate network devices
-  for (const n of nets as any[]) {
-    if (n === activeNet) continue;
-    if ((n.mac || n.mac_address) && n.status === "up") {
-      devices.push({
-        deviceType: "network",
-        name: n.description || n.name || "Network",
-        manufacturer: "",
-        modelName: "",
-        serialNumber: "",
-        ipAddress: n.ipaddress || n.ip_address || n.ip || "",
-        macAddress: n.mac || n.mac_address || "",
-        cpu: "",
-        ram: "",
-        disk: "",
-        os: "",
-        notes: `Network interface — ${n.description || n.name}`,
-        componentsJson: null,
-      });
-    }
-  }
+  // NOTE: Network interfaces are components of the computer, NOT separate devices.
+  // They are already stored in components.networks. Do NOT create standalone "network" devices.
+  // A physical switch/router at the customer site is a different story — that would be
+  // entered manually or via a network discovery tool, not from GLPI Agent per-host inventory.
 
   // === Standalone monitors ===
   for (const m of monitors as any[]) {
@@ -375,16 +380,52 @@ function parseFlatInventory(content: Record<string, any>, deviceId: string): Dev
     });
   }
 
-  // === Standalone printers ===
+  // === Standalone printers — but ONLY real physical printers ===
+  // Filter out Windows virtual printers (PDF, XPS, Fax, OneNote, etc.)
+  // These have driver names like "Microsoft Print To PDF", port "PORTPROMPT:", "nul:", etc.
+  const VIRTUAL_PRINTER_PATTERNS = [
+    /microsoft.*print.*to.*pdf/i,
+    /microsoft.*xps/i,
+    /send.*to.*onenote/i,
+    /onenote.*desktop/i,
+    /fax/i,
+    /microsoft.*print.*to.*onenote/i,
+  ];
+  const VIRTUAL_PRINTER_PORTS = ["PORTPROMPT:", "nul:", "NUL:", "LPT1:", "COM1:"];
+
+  const seenPrinterNames = new Set<string>();
   for (const p of printers as any[]) {
+    // Skip virtual / software-only printers
+    const name = p.name || p.driver || "";
+    if (VIRTUAL_PRINTER_PATTERNS.some(re => re.test(name))) {
+      continue;  // Windows virtual printer — skip
+    }
+    const port = p.port || "";
+    if (VIRTUAL_PRINTER_PORTS.includes(port)) {
+      continue;  // Virtual port — skip
+    }
+    // If network=false and shared=false and no real port → likely virtual, skip
+    if (!p.network && !p.shared && (!port || port.startsWith("nul") || port === "PORTPROMPT:")) {
+      continue;
+    }
+
+    // Dedup by normalised name (case-insensitive)
+    const nameKey = name.toLowerCase().trim();
+    if (!nameKey || seenPrinterNames.has(nameKey)) continue;
+    seenPrinterNames.add(nameKey);
+
     devices.push({
       deviceType: "printer",
       name: p.name || "Printer",
-      manufacturer: "",
-      modelName: "",
-      serialNumber: "",
-      ipAddress: "", macAddress: "",
-      cpu: "", ram: "", disk: "", os: "",
+      manufacturer: p.manufacturer || "",
+      modelName: p.name || "",
+      serialNumber: p.serial || p.serial_number || "",
+      ipAddress: p.port || "",
+      macAddress: "",
+      cpu: "",
+      ram: "",
+      disk: "",
+      os: "",
       notes: "",
       componentsJson: JSON.stringify({
         name: p.name, driver: p.driver, port: p.port,
