@@ -333,6 +333,7 @@ export default function DeviceDetailPage() {
             <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-1.5"><Calendar size={14} className="text-amber-400" /> Thu thập</h3>
             <div className="space-y-0.5">
               <InfoRow label="Ngày thu thập" value={d.collectedAt ? new Date(d.collectedAt).toLocaleDateString("vi-VN") : "-"} />
+              <InfoRow label="Người thu thập" value={d.collectedByUser ? (d.collectedByUser.name || [d.collectedByUser.firstname, d.collectedByUser.realname].filter(Boolean).join(" ")) : "-"} />
               <InfoRow label="Phiên" value={d.session?.id ? `#${d.session.id.slice(0, 8)}` : "-"} />
               <InfoRow label="Trạng thái phiên" value={d.session?.status} />
             </div>
@@ -346,7 +347,38 @@ export default function DeviceDetailPage() {
         </div>
 
         {/* Components detail — GLPI-style tabbed panel */}
-        {d.componentsJson && <DeviceComponentsPanel componentsJson={d.componentsJson} />}
+        {d.componentsJson && <DeviceComponentsPanel componentsJson={d.componentsJson} peripheralDevices={d.peripherals || []} />}
+
+        {/* Parent device link (for monitors etc.) */}
+        {d.parentDevice && (
+          <div className="bg-white rounded-xl p-4 shadow-xs border border-border">
+            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">🔗 Thiết bị gốc</h3>
+            <div className="space-y-0.5">
+              <InfoRow label="Loại" value={DEVICE_LABELS[d.parentDevice.deviceType] || d.parentDevice.deviceType} />
+              <InfoRow label="Tên" value={`${d.parentDevice.manufacturer || ""} ${d.parentDevice.modelName || ""}`.trim() || "—"} />
+            </div>
+            <a href={`/customer-devices/${d.parentDevice.id}`} className="text-blue-600 hover:text-blue-800 text-xs mt-2 inline-block">Xem chi tiết thiết bị gốc →</a>
+          </div>
+        )}
+
+        {/* Connected peripherals list (for computers) */}
+        {d.peripherals && d.peripherals.length > 0 && (
+          <div className="bg-white rounded-xl p-4 shadow-xs border border-border">
+            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">🔗 Thiết bị liên kết</h3>
+            <div className="space-y-1">
+              {d.peripherals.map((p: any) => (
+                <div key={p.id} className="flex items-center justify-between text-[11px] py-1 px-2 bg-gray-50 rounded-lg">
+                  <div className="flex items-center gap-2">
+                    <span>{DEVICE_ICONS[p.deviceType] || "📦"}</span>
+                    <span className="text-gray-700 font-medium">{p.modelName || p.manufacturer || "Thiết bị"}</span>
+                    {p.serialNumber && <span className="text-gray-400 font-mono text-[10px]">SN: {p.serialNumber}</span>}
+                  </div>
+                  <a href={`/customer-devices/${p.id}`} className="text-blue-600 hover:text-blue-800 text-[10px]">Chi tiết →</a>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Notes */}
         {d.notes && (

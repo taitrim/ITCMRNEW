@@ -11,10 +11,10 @@ interface BiosInfo { manufacturer?: string; version?: string; date?: string; sys
 interface HwInfo { name?: string; chassis_type?: string; memory?: number; uuid?: string; defaultgateway?: string; dns?: string; lastloggeduser?: string; workgroup?: string; vmsystem?: string; }
 interface MemorySlot { caption: string; numslots: number; capacity?: number | null; description?: string; manufacturer?: string; model?: string; serialnumber?: string; speed?: number | string | null; type?: string; }
 interface PciSlot { description?: string; designation?: string; name?: string; status?: string; }
-interface StorageEntry { model?: string; disksize?: number; interface?: string; type?: string; serial?: string; firmware?: string; manufacturer?: string; }
+interface StorageEntry { model?: string; disksize?: number; interface?: string; type?: string; serial?: string; firmware?: string; manufacturer?: string; description?: string; smartHealth?: number; }
 interface DriveEntry { letter?: string; label?: string; filesystem?: string; total?: number; free?: number; serial?: string; encrypt_status?: string; systemdrive?: boolean; }
 interface VideoEntry { name?: string; chipset?: string; memory?: number; resolution?: string; pcislot?: string; }
-interface MonitorEntry { caption?: string; manufacturer?: string; serial?: string; }
+interface MonitorEntry { caption?: string; manufacturer?: string; serial?: string; description?: string; base64?: string; }
 interface NetworkEntry { description?: string; mac?: string; ipaddress?: string; ipmask?: string; ipgateway?: string; ipdhcp?: string; ipsubnet?: string; speed?: string; status?: string; type?: string; virtualdev?: boolean; pciid?: string; pnpdeviceid?: string; }
 interface SoftwareEntry { name?: string; version?: string; publisher?: string; }
 interface PrinterEntry { name?: string; driver?: string; port?: string; network?: boolean; shared?: boolean; status?: string; resolution?: string; }
@@ -89,6 +89,7 @@ const TABS = [
   { key: "os", label: "Hệ điều hành", icon: "🖥️" },
   { key: "storage", label: "Lưu trữ", icon: "💾" },
   { key: "network", label: "Mạng", icon: "🌐" },
+  { key: "monitors", label: "Màn hình", icon: "🖥️" },
   { key: "gpu", label: "VGA", icon: "🎮" },
   { key: "software", label: "Phần mềm", icon: "📦" },
   { key: "peripherals", label: "Ngoại vi", icon: "⌨️" },
@@ -290,38 +291,194 @@ function MemorySection({ memories, totalMemory }: { memories: MemorySlot[]; tota
   );
 }
 
-function StorageSection({ storages }: { storages: StorageEntry[] }) {
+function StorageSection({ storages, drives }: { storages: StorageEntry[]; drives?: DriveEntry[] }) {
+  // Match partitions to physical drives by total size (GLPI Agent doesn't provide direct mapping)
+  // Strategy: sort drives by size descending, match partitions by cumulative total
+  const sortedDrives = [...storages].sort((a, b) => (a.disksize || 0) - (b.disksize || 0));
+
+  // Build drive → partitions mapping
+  const drivePartitions = new Map<number, DriveEntry[]>();
+  const mountedDrives = (drives || []).filter(d => d.letter);  // Only mounted drives with letters
+  const unmountedDrives = (drives || []).filter(d => !d.letter);  // EFI/recovery partitions
+
+  if (drives && drives.length > 0 && storages.length > 0) {
+    // Simple matching: match partition total to physical disk size
+    // C: + hidden partitions → smallest SSD, D: → largest HDD, etc.
+    const usedPartitionIndices = new Set<number>();
+    for (let di = 0; di < sortedDrives.length; di++) {
+      const driveSize = sortedDrives[di].disksize || 0;
+      if (driveSize === 0) continue;
+
+      let bestMatch: number[] = [];
+      let bestDiff = Infinity;
+
+      // Try matching partitions to this drive by total size
+      const subsets = mountedDrives.length <= 8 ? allSubsets(mountedDrives, usedPartitionIndices) : [[]];
+      for (const subset of subsets) {
+        if (subset.length === 0) continue;
+        const total = subset.reduce((s, idx) => s + (mountedDrives[idx].total || 0), 0);
+        const diff = Math.abs(total - driveSize);
+        if (diff < bestDiff && diff / driveSize < 0.15) {  // within 15% tolerance
+          bestDiff = diff;
+          bestMatch = subset;
+        }
+      }
+
+      drivePartitions.set(di, bestMatch.map(idx => mountedDrives[idx]));
+      bestMatch.forEach(idx => usedPartitionIndices.add(idx));
+    }
+
+    // Assign remaining unassigned partitions to best-fitting drive
+    mountedDrives.forEach((d, idx) => {
+      if (usedPartitionIndices.has(idx)) return;
+      // Find drive whose remaining capacity can fit this partition
+      for (let di = 0; di < sortedDrives.length; di++) {
+        const existing = drivePartitions.get(di) || [];
+        const usedTotal = existing.reduce((s, p) => s + (p.total || 0), 0);
+        const driveSize = sortedDrives[di].disksize || 0;
+        if (driveSize > 0 && (usedTotal + (d.total || 0)) <= driveSize * 1.05) {
+          existing.push(d);
+          drivePartitions.set(di, existing);
+          usedPartitionIndices.add(idx);
+          break;
+        }
+      }
+    });
+  }
+
   return (
-    <SectionCard icon="💾" title="Ổ cứng" count={storages.length}>
-      <div className="space-y-1.5">
-        {storages.map((s, i) => {
-          const isSsd = s.type?.toUpperCase().includes("SSD");
-          const isNvme = s.interface?.toUpperCase().includes("NVME") || s.model?.toUpperCase().includes("NVME");
-          return (
-            <div key={i} className="flex items-center justify-between text-[11px] py-1.5 px-2 bg-gray-50 rounded-lg">
-              <div className="flex items-center gap-2 min-w-0">
-                <span className="flex-shrink-0">{isSsd || isNvme ? "⚡" : "🔵"}</span>
-                <span className="text-gray-700 font-medium truncate">{s.model || `Đĩa ${i + 1}`}</span>
+    <div className="space-y-3">
+      {/* Drives grouped with their partitions */}
+      {sortedDrives.map((s, i) => {
+        const isSsd = s.type?.toUpperCase().includes("SSD");
+        const isNvme = s.interface?.toUpperCase().includes("NVME") || s.model?.toUpperCase().includes("NVME");
+        const isUsb = s.interface?.toUpperCase().includes("USB") || s.type?.toUpperCase().includes("UNKNOWN");
+        const partitions = drivePartitions.get(i) || [];
+        const health = s.smartHealth;
+        const driveTotal = s.disksize || 0;
+        const partitionTotal = partitions.reduce((sum, p) => sum + (p.total || 0), 0);
+        const partitionFree = partitions.reduce((sum, p) => sum + (p.free || 0), 0);
+        const usagePct = partitionTotal > 0 ? Math.round(((partitionTotal - partitionFree) / partitionTotal) * 100) : null;
+
+        return (
+          <SectionCard
+            key={i}
+            icon={isUsb ? "🔌" : isSsd || isNvme ? "⚡" : "🔵"}
+            title={s.model || `Ổ đĩa ${i + 1}`}
+            count={partitions.length > 0 ? partitions.length : undefined}
+          >
+            {/* Drive info header */}
+            <div className="flex items-center justify-between text-[11px] mb-2 pb-2 border-b border-gray-100">
+              <div className="flex items-center gap-2">
+                {isSsd && <span className="px-1.5 py-0.5 rounded bg-orange-50 text-orange-600 font-semibold text-[10px]">SSD</span>}
+                {isNvme && !isSsd && <span className="px-1.5 py-0.5 rounded bg-orange-50 text-orange-600 font-semibold text-[10px]">NVMe</span>}
+                {!isSsd && !isNvme && !isUsb && <span className="px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 font-semibold text-[10px]">HDD</span>}
+                {isUsb && <span className="px-1.5 py-0.5 rounded bg-purple-50 text-purple-600 font-semibold text-[10px]">USB</span>}
+                <span className="text-gray-600">{s.interface || "?"}</span>
+                <span className="text-gray-400 font-mono text-[10px]">{s.serial || ""}</span>
               </div>
-              <span className="text-gray-500 flex-shrink-0 ml-2 text-right">
-                {s.disksize ? fmtMb(s.disksize) : "?"}
-                {s.type && <span className="font-semibold text-gray-600 ml-1">{s.type}</span>}
-                {s.interface && <span className="ml-1">· {s.interface}</span>}
-              </span>
+              <span className="text-gray-800 font-semibold">{driveTotal ? fmtMb(driveTotal) : "?"}</span>
             </div>
-          );
-        })}
-      </div>
-      <div className="mt-2 pt-2 border-t border-gray-100 flex items-center justify-between text-[11px] px-1">
-        <span className="text-gray-400">Tổng:</span>
+
+            {/* Disk health bar (SMART-based) */}
+            {health != null ? (
+              <div className="mb-2">
+                <div className="flex items-center justify-between text-[10px] mb-0.5">
+                  <span className="text-gray-500">Sức khỏe ổ đĩa (SMART)</span>
+                  <span className={cn("font-bold text-xs",
+                    health >= 90 ? "text-green-600" : health >= 70 ? "text-yellow-600" : health >= 50 ? "text-orange-600" : "text-red-600"
+                  )}>{health}%</span>
+                </div>
+                <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                  <div className={cn("h-full rounded-full transition-all",
+                    health >= 90 ? "bg-green-500" : health >= 70 ? "bg-yellow-500" : health >= 50 ? "bg-orange-500" : "bg-red-500"
+                  )} style={{ width: `${health}%` }} />
+                </div>
+              </div>
+            ) : (
+              <div className="mb-2 flex items-center gap-1.5 text-[10px] text-gray-400 py-1 px-2 bg-gray-50 rounded-lg">
+                <span>🩺</span>
+                <span>Chưa có dữ liệu SMART — cài <code className="font-mono bg-gray-100 px-1 rounded">smartmontools</code> trên máy khách và thu thập lại</span>
+              </div>
+            )}
+
+            {/* Usage bar (from partitions) */}
+            {usagePct != null && (
+              <div className="mb-2">
+                <div className="flex items-center justify-between text-[10px] mb-0.5">
+                  <span className="text-gray-500">Dung lượng đã dùng</span>
+                  <span className="text-gray-600 font-medium">{partitionFree > 0 ? fmtMb(partitionFree) : "?"} trống / {fmtMb(partitionTotal)}</span>
+                </div>
+                <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                  <div className={cn("h-full rounded-full", usagePct > 90 ? "bg-red-400" : usagePct > 70 ? "bg-amber-400" : "bg-blue-400")} style={{ width: `${usagePct}%` }} />
+                </div>
+              </div>
+            )}
+
+            {/* Partitions list */}
+            {partitions.length > 0 && (
+              <div className="space-y-1">
+                {partitions.map((d, pi) => {
+                  const partUsage = d.total && d.free != null ? Math.round(((d.total - d.free) / d.total) * 100) : null;
+                  return (
+                    <div key={pi} className="text-[11px] py-1 px-2 bg-white rounded-lg border border-gray-100">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-mono text-gray-800 font-semibold text-xs">{d.letter || "?"}:</span>
+                          <span className="text-gray-600">{d.label || ""}</span>
+                          {d.systemdrive && <span className="text-[9px] px-1 py-0 rounded bg-blue-100 text-blue-600 font-medium">System</span>}
+                        </div>
+                        <div className="text-gray-500 text-right">
+                          <span>{d.total ? fmtMb(d.total) : "?"}</span>
+                          <span className="text-gray-400 ml-1">({d.free != null ? `${fmtMb(d.free)} trống` : ""})</span>
+                        </div>
+                      </div>
+                      {partUsage != null && (
+                        <div className="mt-1 h-1 bg-gray-100 rounded-full overflow-hidden">
+                          <div className={cn("h-full rounded-full", partUsage > 90 ? "bg-red-400" : partUsage > 70 ? "bg-amber-400" : "bg-green-400")} style={{ width: `${partUsage}%` }} />
+                        </div>
+                      )}
+                      <div className="flex gap-2 text-gray-400 text-[10px] mt-0.5">
+                        {d.filesystem && <span>{d.filesystem}</span>}
+                        {d.encrypt_status === "Yes" && <span>🔒 Đã mã hóa</span>}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {partitions.length === 0 && (
+              <div className="text-gray-400 text-[10px] italic">Chưa xác định phân vùng</div>
+            )}
+          </SectionCard>
+        );
+      })}
+
+      {/* Summary */}
+      <div className="flex items-center justify-between text-[11px] px-3 py-2 bg-gray-50 rounded-xl border border-gray-100">
+        <span className="text-gray-500">Tổng dung lượng:</span>
         <span className="text-gray-700 font-medium">
-          {fmtMb(storages.reduce((s, d) => s + (d.disksize || 0), 0))}
-          {" — "}{storages.length} ổ
-          ({storages.filter(d => d.type?.toUpperCase().includes("SSD") || d.interface?.toUpperCase().includes("NVME")).length} SSD)
+          {fmtMb(storages.reduce((s, d) => s + (d.disksize || 0), 0))} — {storages.length} ổ
+          ({storages.filter(d => d.type?.toUpperCase().includes("SSD") || d.interface?.toUpperCase().includes("NVME")).length} SSD · {storages.filter(d => !d.type?.toUpperCase().includes("SSD") && !d.interface?.toUpperCase().includes("NVME") && !d.interface?.toUpperCase().includes("USB")).length} HDD)
         </span>
       </div>
-    </SectionCard>
+    </div>
   );
+}
+
+/** Generate non-empty subsets of indices (brute force for ≤8 items) */
+function allSubsets(items: DriveEntry[], exclude: Set<number>): number[][] {
+  const indices = items.map((_, i) => i).filter(i => !exclude.has(i));
+  const result: number[][] = [];
+  for (let mask = 1; mask < (1 << indices.length); mask++) {
+    const subset: number[] = [];
+    for (let bit = 0; bit < indices.length; bit++) {
+      if (mask & (1 << bit)) subset.push(indices[bit]);
+    }
+    result.push(subset);
+  }
+  return result;
 }
 
 function DrivesSection({ drives }: { drives: DriveEntry[] }) {
@@ -418,6 +575,57 @@ function MonitorsSection({ monitors }: { monitors: MonitorEntry[] }) {
         ))}
       </div>
     </SectionCard>
+  );
+}
+
+/** Enhanced monitors tab — shows EDID details + linked DB device */
+function MonitorsTab({ monitors, peripheralDevices }: { monitors: MonitorEntry[]; peripheralDevices?: Array<{ id: string; deviceType: string; manufacturer: string | null; modelName: string | null; serialNumber: string | null }> }) {
+  const linkedMonitors = peripheralDevices?.filter(p => p.deviceType === "monitor") || [];
+
+  return (
+    <div className="space-y-3">
+      {/* Monitors from GLPI Agent (component data) */}
+      {monitors.length > 0 && (
+        <SectionCard icon="🖥️" title="Màn hình kết nối" count={monitors.length}>
+          <div className="space-y-2">
+            {monitors.map((m, i) => (
+              <div key={i} className="text-[11px] py-2 px-3 bg-gray-50 rounded-lg space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-800 font-semibold text-xs">{m.caption || `Màn ${i + 1}`}</span>
+                  <span className="text-green-600 text-[10px] font-medium">● Kết nối</span>
+                </div>
+                <div className="grid grid-cols-2 gap-x-4">
+                  <InfoRow label="Hãng" value={m.manufacturer} />
+                  <InfoRow label="Serial" value={m.serial} mono />
+                  {m.description && <InfoRow label="Năm sản xuất" value={m.description} />}
+                </div>
+              </div>
+            ))}
+          </div>
+        </SectionCard>
+      )}
+
+      {/* Linked monitor devices from DB (standalone records) */}
+      {linkedMonitors.length > 0 && (
+        <SectionCard icon="📋" title="Thiết bị màn hình" count={linkedMonitors.length}>
+          <div className="space-y-1">
+            {linkedMonitors.map((lm, i) => (
+              <div key={i} className="flex items-center justify-between text-[11px] py-1.5 px-2 bg-blue-50 rounded-lg">
+                <div className="min-w-0">
+                  <span className="text-gray-800 font-medium">{lm.modelName || lm.manufacturer || `Màn hình ${i + 1}`}</span>
+                  {lm.serialNumber && <span className="text-gray-400 ml-2 font-mono text-[10px]">SN: {lm.serialNumber}</span>}
+                </div>
+                <a href={`/customer-devices/${lm.id}`} className="text-blue-600 hover:text-blue-800 text-[10px] ml-2 flex-shrink-0">Xem chi tiết →</a>
+              </div>
+            ))}
+          </div>
+        </SectionCard>
+      )}
+
+      {monitors.length === 0 && linkedMonitors.length === 0 && (
+        <div className="text-center text-gray-400 text-[11px] py-4">Không có thông tin màn hình</div>
+      )}
+    </div>
   );
 }
 
@@ -597,7 +805,7 @@ function PortsSection({ ports }: { ports: PortEntry[] }) {
 
 /* ===== Main export: Tabbed GLPI-style device detail ===== */
 
-export default function DeviceComponentsPanel({ componentsJson }: { componentsJson: string }) {
+export default function DeviceComponentsPanel({ componentsJson, peripheralDevices }: { componentsJson: string; peripheralDevices?: Array<{ id: string; deviceType: string; manufacturer: string | null; modelName: string | null; serialNumber: string | null }> }) {
   const c: Components = JSON.parse(componentsJson);
   const [activeTab, setActiveTab] = useState<TabKey>("overview");
 
@@ -606,8 +814,9 @@ export default function DeviceComponentsPanel({ componentsJson }: { componentsJs
   const hasStorages = (c.storages?.length || 0) > 0 || (c.drives?.length || 0) > 0;
   const hasNetwork = (c.networks?.length || 0) > 0;
   const hasGpu = (c.videos?.length || 0) > 0;
+  const hasMonitors = (c.monitors?.length || 0) > 0 || (peripheralDevices?.filter(p => p.deviceType === "monitor").length || 0) > 0;
   const hasSoftware = (c.softwares?.length || 0) > 0;
-  const hasPeriph = (c.monitors?.length || 0) > 0 || (c.printers?.length || 0) > 0 || (c.sounds?.length || 0) > 0 || (c.controllers?.length || 0) > 0 || (c.inputs?.length || 0) > 0 || (c.usbdevices?.length || 0) > 0 || (c.slots?.length || 0) > 0 || (c.ports?.length || 0) > 0 || (c.memories?.length || 0) > 0;
+  const hasPeriph = (c.printers?.length || 0) > 0 || (c.sounds?.length || 0) > 0 || (c.controllers?.length || 0) > 0 || (c.inputs?.length || 0) > 0 || (c.usbdevices?.length || 0) > 0 || (c.slots?.length || 0) > 0 || (c.ports?.length || 0) > 0 || (c.memories?.length || 0) > 0;
   const hasSecurity = (c.antivirus?.length || 0) > 0 || (c.firewalls?.length || 0) > 0;
 
   const visibleTabs = TABS.filter(t => {
@@ -616,6 +825,7 @@ export default function DeviceComponentsPanel({ componentsJson }: { componentsJs
     if (t.key === "os") return hasOs;
     if (t.key === "storage") return hasStorages;
     if (t.key === "network") return hasNetwork;
+    if (t.key === "monitors") return hasMonitors;
     if (t.key === "gpu") return hasGpu;
     if (t.key === "software") return hasSoftware;
     if (t.key === "peripherals") return hasPeriph;
@@ -663,14 +873,16 @@ export default function DeviceComponentsPanel({ componentsJson }: { componentsJs
         )}
         {activeTab === "os" && c.operatingsystem && <OsSection os={c.operatingsystem} />}
         {activeTab === "storage" && (
-          <>{c.storages && c.storages.length > 0 && <StorageSection storages={c.storages} />}{c.drives && c.drives.length > 0 && <DrivesSection drives={c.drives} />}</>
+          <>{c.storages && c.storages.length > 0 && <StorageSection storages={c.storages} drives={c.drives} />}{c.drives && c.storages?.length === 0 && <DrivesSection drives={c.drives} />}</>
         )}
         {activeTab === "network" && c.networks && <NetworkSection networks={c.networks} />}
+        {activeTab === "monitors" && (
+          <MonitorsTab monitors={c.monitors || []} peripheralDevices={peripheralDevices} />
+        )}
         {activeTab === "gpu" && c.videos && <VideoSection videos={c.videos} />}
         {activeTab === "software" && c.softwares && <SoftwareSection softwares={c.softwares} />}
         {activeTab === "peripherals" && (
           <>
-            {c.monitors && c.monitors.length > 0 && <MonitorsSection monitors={c.monitors} />}
             {c.printers && c.printers.length > 0 && <PrintersSection printers={c.printers} />}
             {c.sounds && c.sounds.length > 0 && <SoundSection sounds={c.sounds} />}
             {c.controllers && c.controllers.length > 0 && <ControllersSection controllers={c.controllers} />}

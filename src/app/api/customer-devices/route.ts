@@ -38,6 +38,7 @@ export async function GET(req: Request) {
       customer: { select: { id: true, name: true, code: true } },
       address: { select: { id: true, label: true, address: true, city: true } },
       assignedTo: { select: { id: true, firstName: true, lastName: true, code: true, department: true, position: true } },
+      peripherals: { select: { id: true, deviceType: true, manufacturer: true, modelName: true, serialNumber: true } },
     },
     orderBy: { createdAt: "desc" },
   });

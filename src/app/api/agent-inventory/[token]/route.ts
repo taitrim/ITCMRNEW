@@ -25,6 +25,7 @@ type DeviceRecord = {
   os: string;
   notes: string;
   componentsJson: string | null;
+  parentDeviceId?: string;  // For monitors/peripherals linked to a computer
 };
 
 type InventoryPayload = Record<string, unknown>;
@@ -363,7 +364,7 @@ function parseFlatInventory(content: Record<string, any>, deviceId: string): Dev
   // A physical switch/router at the customer site is a different story — that would be
   // entered manually or via a network discovery tool, not from GLPI Agent per-host inventory.
 
-  // === Standalone monitors ===
+  // === Standalone monitors — linked to the parent computer ===
   for (const m of monitors as any[]) {
     devices.push({
       deviceType: "monitor",
@@ -376,7 +377,9 @@ function parseFlatInventory(content: Record<string, any>, deviceId: string): Dev
       notes: "",
       componentsJson: JSON.stringify({
         caption: m.caption, manufacturer: m.manufacturer, serial: m.serial,
+        description: m.description || "", base64: m.base64 || "",
       }),
+      parentDeviceId: deviceId,  // link monitor to this computer
     });
   }
 
@@ -845,8 +848,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
   // Create or UPDATE device records (dedup by serialNumber + deviceType for same customer)
   const created: Array<Record<string, unknown>> = [];
   const updated: Array<Record<string, unknown>> = [];
+  // Map of hardware UUID / deviceId → Prisma ID, so child devices (monitors) can reference parent
+  const computerPrismaIdMap = new Map<string, string>();
 
-  for (const d of devices) {
+  // Phase 1: Create/update computers first (they are the parents)
+  const computerDevices = devices.filter(d => d.deviceType === "computer" || d.deviceType === "desktop" || d.deviceType === "laptop" || d.deviceType === "server" || d.deviceType === "aio" || d.deviceType === "tablet");
+  const childDevices = devices.filter(d => !computerDevices.includes(d));
+
+  for (const d of computerDevices) {
     // Try to find existing device by serialNumber (most reliable) OR by matching name+manufacturer
     let existing: any = null;
     if (d.serialNumber) {
@@ -869,6 +878,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
         },
       });
     }
+
+    // Extract the hardware UUID (hardware.uuid) stored in notes "deviceid:..." by parser
+    const deviceidMatch = d.notes?.match(/deviceid:\s*([^\s]+)/);
+    const hwDeviceId = deviceidMatch?.[1] || "";
 
     if (existing) {
       // UPDATE existing device
@@ -896,6 +909,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
         },
       });
       updated.push(device);
+      // Map hardware deviceId → Prisma ID for child device linking
+      if (hwDeviceId) computerPrismaIdMap.set(hwDeviceId, device.id);
+      computerPrismaIdMap.set(d.serialNumber || d.modelName, device.id);
     } else {
       // CREATE new device
       const device = await prisma.customerCollectedDevice.create({
@@ -916,6 +932,84 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
           notes: d.notes || null,
           collectedById: session.collectedById || undefined,
           sessionId: session.id,
+          status: "active",
+          condition: null,
+        },
+        include: {
+          address: { select: { id: true, label: true, address: true } },
+          assignedTo: { select: { id: true, firstName: true, lastName: true, code: true, department: true } },
+        },
+      });
+      created.push(device);
+      if (hwDeviceId) computerPrismaIdMap.set(hwDeviceId, device.id);
+      computerPrismaIdMap.set(d.serialNumber || d.modelName, device.id);
+    }
+  }
+
+  // Phase 2: Create/update child devices (monitors, printers etc.)
+  // Resolve parentDeviceId from parser's deviceId (hardware UUID) to actual Prisma ID
+  for (const d of childDevices) {
+    // Resolve parentDeviceId — parser set it to the hardware UUID string,
+    // we need to find the Prisma ID that was assigned to the computer
+    let resolvedParentId: string | null = null;
+    if (d.parentDeviceId) {
+      resolvedParentId = computerPrismaIdMap.get(d.parentDeviceId) || null;
+    }
+
+    let existing: any = null;
+    if (d.serialNumber) {
+      existing = await prisma.customerCollectedDevice.findFirst({
+        where: {
+          customerId: session.customerId,
+          deviceType: d.deviceType,
+          serialNumber: d.serialNumber,
+        },
+      });
+    }
+    if (!existing && d.manufacturer && d.modelName) {
+      existing = await prisma.customerCollectedDevice.findFirst({
+        where: {
+          customerId: session.customerId,
+          deviceType: d.deviceType,
+          manufacturer: d.manufacturer,
+          modelName: d.modelName,
+        },
+      });
+    }
+
+    if (existing) {
+      const device = await prisma.customerCollectedDevice.update({
+        where: { id: existing.id },
+        data: {
+          manufacturer: d.manufacturer || existing.manufacturer,
+          modelName: d.modelName || existing.modelName,
+          serialNumber: d.serialNumber || existing.serialNumber,
+          componentsJson: d.componentsJson || existing.componentsJson,
+          notes: d.notes ? (existing.notes ? `${existing.notes}\n${d.notes}` : d.notes) : existing.notes,
+          sessionId: session.id,
+          parentDeviceId: resolvedParentId || existing.parentDeviceId,
+          collectedAt: new Date(),
+        },
+        include: {
+          address: { select: { id: true, label: true, address: true } },
+          assignedTo: { select: { id: true, firstName: true, lastName: true, code: true, department: true } },
+        },
+      });
+      updated.push(device);
+    } else {
+      const device = await prisma.customerCollectedDevice.create({
+        data: {
+          customerId: session.customerId,
+          addressId: session.addressId,
+          deviceType: d.deviceType,
+          manufacturer: d.manufacturer || null,
+          modelName: d.modelName || null,
+          serialNumber: d.serialNumber || null,
+          componentsJson: d.componentsJson || null,
+          notes: d.notes || null,
+          collectedById: session.collectedById || undefined,
+          sessionId: session.id,
+          parentDeviceId: resolvedParentId,
           status: "active",
           condition: null,
         },

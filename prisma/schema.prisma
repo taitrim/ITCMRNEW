@@ -8293,6 +8293,11 @@ model CustomerCollectedDevice {
   assignedToId    String?  // Gán cho nhân viên khách hàng nào
   assignedTo      CustomerEmployee? @relation(fields: [assignedToId], references: [id])
 
+  // Device linkage — monitor connected to a computer, etc.
+  parentDeviceId  String?  // ID của thiết bị cha (máy tính nối màn hình)
+  parentDevice    CustomerCollectedDevice?  @relation("DevicePeripherals", fields: [parentDeviceId], references: [id])
+  peripherals     CustomerCollectedDevice[] @relation("DevicePeripherals")  // Màn hình/nơi vi gắn vào máy này
+
   // Status
   status          String   @default("active") // active | broken | stored | retired
   condition       String?  // good | fair | broken | damaged | other

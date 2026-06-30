@@ -22,6 +22,7 @@ const UpdateSchema = z.object({
   componentsJson: z.string().optional().nullable(),
   quantity: z.number().int().min(1).optional(),
   notes: z.string().max(500).optional().or(z.literal("")).optional(),
+  parentDeviceId: z.string().nullable().optional(),
 });
 
 const emptyToNull = (v: unknown) => (v === "" ? null : v);
@@ -37,11 +38,24 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       customer: { select: { id: true, name: true, code: true } },
       address: { select: { id: true, label: true, address: true, city: true } },
       assignedTo: { select: { id: true, firstName: true, lastName: true, code: true, department: true, position: true, phone: true, email: true } },
-      session: { select: { id: true, token: true, status: true, createdAt: true, completedAt: true } },
+      session: { select: { id: true, token: true, status: true, createdAt: true, completedAt: true, collectedById: true } },
+      parentDevice: { select: { id: true, manufacturer: true, modelName: true, deviceType: true } },
+      peripherals: { select: { id: true, deviceType: true, manufacturer: true, modelName: true, serialNumber: true } },
     },
   });
   if (!device) return Response.json({ error: "Not found" }, { status: 404 });
-  return Response.json(device);
+
+  // Resolve collectedBy user info (no Prisma relation — query manually)
+  let collectedByUser: { id: string; name: string | null; firstname: string | null; realname: string | null } | null = null;
+  const collectorId = device.collectedById || device.session?.collectedById;
+  if (collectorId) {
+    collectedByUser = await prisma.users.findUnique({
+      where: { id: collectorId },
+      select: { id: true, name: true, firstname: true, realname: true },
+    });
+  }
+
+  return Response.json({ ...device, collectedByUser });
 }
 
 export async function PUT(req: Request, { params }: { params: Promise<{ id: string; deviceId: string }> }) {
@@ -65,6 +79,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     include: {
       address: { select: { id: true, label: true, address: true, city: true } },
       assignedTo: { select: { id: true, firstName: true, lastName: true, code: true, department: true, position: true } },
+      peripherals: { select: { id: true, deviceType: true, manufacturer: true, modelName: true, serialNumber: true } },
     },
   });
 
