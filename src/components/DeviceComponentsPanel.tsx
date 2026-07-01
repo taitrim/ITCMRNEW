@@ -8,7 +8,8 @@ import { cn } from "@/lib/utils";
 interface CpuEntry { name: string; manufacturer?: string; speed?: number; core?: number; thread?: number; serial?: string; id?: string; }
 interface OsInfo { full_name: string; version?: string; kernel_version?: string; build?: string; arch?: string; install_date?: string; boot_time?: string; timezone?: string; fqdn?: string; }
 interface BiosInfo { manufacturer?: string; version?: string; date?: string; system_manufacturer?: string; system_model?: string; motherboard_manufacturer?: string; motherboard_model?: string; }
-interface HwInfo { name?: string; chassis_type?: string; memory?: number; uuid?: string; defaultgateway?: string; dns?: string; lastloggeduser?: string; workgroup?: string; vmsystem?: string; }
+interface HwInfo { name?: string; chassis_type?: string; memory?: number; uuid?: string; defaultgateway?: string; dns?: string; lastloggeduser?: string; datelastloggeduser?: string; workgroup?: string; vmsystem?: string; }
+interface LoggedUser { login: string; domain?: string; }
 interface MemorySlot { caption: string; numslots: number; capacity?: number | null; description?: string; manufacturer?: string; model?: string; serialnumber?: string; speed?: number | string | null; type?: string; }
 interface PciSlot { description?: string; designation?: string; name?: string; status?: string; }
 interface StorageEntry { model?: string; disksize?: number; interface?: string; type?: string; serial?: string; firmware?: string; manufacturer?: string; description?: string; smartHealth?: number; }
@@ -47,6 +48,7 @@ interface Components {
   inputs?: InputEntry[];
   usbdevices?: UsbEntry[];
   ports?: PortEntry[];
+  users?: LoggedUser[];
   formFactor?: string;
   totalMemory?: number;
 }
@@ -106,6 +108,14 @@ function OverviewSection({ c }: { c: Components }) {
   const populatedSlots = c.memories?.filter(m => m.capacity && m.capacity > 0).length || 0;
   const totalSlots = c.memories?.length || 0;
   const lastUser = c.hardware?.lastloggeduser;
+  const lastUserDate = c.hardware?.datelastloggeduser;
+  const loggedUsers = c.users || [];
+  // Detect OS from operatingsystem for label
+  const osName = c.operatingsystem?.full_name || "";
+  const isWindows = /windows/i.test(osName);
+  const isLinux = /linux/i.test(osName);
+  const isMacOS = /mac\s*os|darwin/i.test(osName);
+  const osLabel = isWindows ? "Windows" : isLinux ? "Linux" : isMacOS ? "macOS" : "HĐH";
 
   return (
     <SectionCard icon="📊" title="Tổng quan">
@@ -124,13 +134,33 @@ function OverviewSection({ c }: { c: Components }) {
           )}
         </div>
       )}
-      {/* Windows logged-in user — prominent display */}
+      {/* Last logged-in user — works across all OS (Windows: WMI, Linux: last, macOS: last) */}
       {lastUser && (
         <div className="mb-2 flex items-center gap-2 px-2 py-1.5 bg-sky-50 rounded-lg">
           <span className="text-base">👤</span>
-          <div>
-            <div className="text-[9px] text-sky-500 uppercase tracking-wider font-medium">User đăng nhập Windows</div>
+          <div className="flex-1 min-w-0">
+            <div className="text-[9px] text-sky-500 uppercase tracking-wider font-medium">
+              User đăng nhập {osLabel} (cuối cùng)
+            </div>
             <div className="text-[12px] text-sky-800 font-bold">{lastUser}</div>
+            {lastUserDate && (
+              <div className="text-[9px] text-sky-400">{lastUserDate}</div>
+            )}
+          </div>
+        </div>
+      )}
+      {/* Currently logged-in users (all OS — Windows: WMI Explorer.exe, Linux: who/loginctl, macOS: who) */}
+      {loggedUsers.length > 0 && (
+        <div className="mb-2 px-2 py-1.5 bg-emerald-50 rounded-lg">
+          <div className="text-[9px] text-emerald-500 uppercase tracking-wider font-medium mb-1">
+            User đang đăng nhập ({loggedUsers.length})
+          </div>
+          <div className="flex flex-wrap gap-1">
+            {loggedUsers.map((u, i) => (
+              <span key={i} className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-emerald-100 rounded text-[10px] font-medium text-emerald-800">
+                {u.domain && u.domain !== "." ? `${u.domain}\\` : ""}{u.login}
+              </span>
+            ))}
           </div>
         </div>
       )}

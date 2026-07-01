@@ -256,16 +256,27 @@ export default function DeviceDetailPage() {
 
   const d = device;
 
-  // Extract form factor from componentsJson
+  // Extract form factor + user info from componentsJson
   let formFactor: string | null = null;
   let lastLoggedUser: string | null = null;
+  let lastLoggedUserDate: string | null = null;
+  let osFullName: string | null = null;
+  let loggedUsers: { login: string; domain?: string }[] = [];
   if (d.componentsJson) {
     try {
       const comp = JSON.parse(d.componentsJson);
       formFactor = comp.formFactor || null;
       lastLoggedUser = comp.hardware?.lastloggeduser || null;
+      lastLoggedUserDate = comp.hardware?.datelastloggeduser || null;
+      osFullName = comp.operatingsystem?.full_name || null;
+      loggedUsers = comp.users || [];
     } catch {}
   }
+  // Detect OS for label
+  const isWin = /windows/i.test(osFullName || "");
+  const isLinux = /linux/i.test(osFullName || "");
+  const isMac = /mac\s*os|darwin/i.test(osFullName || "");
+  const osLabel = isWin ? "Windows" : isLinux ? "Linux" : isMac ? "macOS" : "HĐH";
 
   return (
     <div className="min-h-screen bg-surface-secondary/30 pb-8">
@@ -312,13 +323,30 @@ export default function DeviceDetailPage() {
           </div>
         </div>
 
-        {/* Windows logged-in user badge */}
+        {/* Last logged-in user badge — works across all OS */}
         {lastLoggedUser && (
           <div className="bg-white rounded-xl px-4 py-3 shadow-xs border border-border flex items-center gap-3">
             <div className="w-8 h-8 rounded-full bg-sky-100 flex items-center justify-center text-sm flex-shrink-0">👤</div>
-            <div>
-              <div className="text-[10px] text-gray-400 font-medium uppercase tracking-wider">User đăng nhập Windows</div>
+            <div className="flex-1 min-w-0">
+              <div className="text-[10px] text-gray-400 font-medium uppercase tracking-wider">User đăng nhập {osLabel} (cuối cùng)</div>
               <div className="text-sm font-semibold text-gray-800">{lastLoggedUser}</div>
+              {lastLoggedUserDate && (
+                <div className="text-[10px] text-gray-400">{lastLoggedUserDate}</div>
+              )}
+            </div>
+          </div>
+        )}
+        {/* Currently logged-in users */}
+        {loggedUsers.length > 0 && (
+          <div className="bg-white rounded-xl px-4 py-3 shadow-xs border border-border">
+            <div className="text-[10px] text-gray-400 font-medium uppercase tracking-wider mb-1.5">User đang đăng nhập ({loggedUsers.length})</div>
+            <div className="flex flex-wrap gap-1.5">
+              {loggedUsers.map((u, i) => (
+                <span key={i} className="inline-flex items-center gap-1 px-2 py-1 bg-emerald-50 rounded-lg text-xs font-medium text-emerald-800">
+                  <span className="text-[10px]">●</span>
+                  {u.domain && u.domain !== "." ? `${u.domain}\\` : ""}{u.login}
+                </span>
+              ))}
             </div>
           </div>
         )}

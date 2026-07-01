@@ -143,6 +143,7 @@ function parseFlatInventory(content: Record<string, any>, deviceId: string): Dev
   };
 
   // --- Hardware ---
+  const loggedUsers = asArray(content.users);
   components.hardware = {
     name: hw.name || "",
     chassis_type: hw.chassis_type || "",
@@ -151,9 +152,17 @@ function parseFlatInventory(content: Record<string, any>, deviceId: string): Dev
     defaultgateway: hw.defaultgateway || "",
     dns: hw.dns || "",
     lastloggeduser: hw.lastloggeduser || "",
+    datelastloggeduser: hw.datelastloggeduser || "",
     workgroup: hw.workgroup || "",
     vmsystem: hw.vmsystem || "",
   };
+
+  // --- Logged-in users (all OS: Windows via WMI, Linux/macOS via who/loginctl/last) ---
+  // Each entry: { LOGIN: string, DOMAIN?: string }
+  components.users = loggedUsers.map((u: any) => ({
+    login: u.LOGIN || u.login || "",
+    domain: u.DOMAIN || u.domain || "",
+  }));
 
   // --- Memory slots (full detail: capacity/type/speed for populated slots, caption only for empty) ---
   // GLPI Agent --full outputs capacity/type/speed/manufacturer/model/serialnumber for populated slots,
