@@ -1,0 +1,70 @@
+﻿{
+  "action": "inventory",
+  "deviceid": "macbook-pro-taitrim-23.5.0-2026-07-01-14-00-00",
+  "content": {
+    "hardware": {
+      "name": "macbook-pro-taitrim.local",
+      "chassis_type": "Laptop",
+      "memory": 18432,
+      "uuid": "AABBCCDD-1122-3344-5566-778899AABBCC",
+      "defaultgateway": "192.168.1.1",
+      "dns": "192.168.1.1",
+      "lastloggeduser": "taitrim",
+      "datelastloggeduser": "Mon Jul  1 13:20",
+      "workgroup": "",
+      "vmsystem": "Physical"
+    },
+    "bios": {
+      "smanufacturer": "Apple",
+      "smodel": "MacBook Pro (14-inch, 2023)",
+      "sserial": "FVFXXXXXXXXXXX",
+      "bdate": "2023-01-01",
+      "bversion": "2023.001"
+    },
+    "operatingsystem": {
+      "full_name": "macOS 14.5 Sonoma",
+      "kernel_version": "23.5.0",
+      "arch": "arm64",
+      "install_date": "2023-10-01 00:00:00",
+      "boot_time": "2026-07-01 09:00:00",
+      "fqdn": "macbook-pro-taitrim.local"
+    },
+    "cpus": [
+      { "name": "Apple M3 Pro", "manufacturer": "Apple", "speed": 4050, "core": 12, "thread": 12 }
+    ],
+    "memories": [
+      { "caption": "Onboard", "numslots": 0, "capacity": 18432, "type": "LPDDR5", "speed": 6400, "manufacturer": "Apple", "serialnumber": "" }
+    ],
+    "storages": [
+      { "model": "Apple AP0256", "disksize": 257948, "interface": "NVMe", "type": "SSD", "serial": "AP0256Q_XXXXXXX", "firmware": "21.3" }
+    ],
+    "drives": [
+      { "letter": "/", "label": "Macintosh HD", "filesystem": "apfs", "total": 245000, "free": 120000, "systemdrive": true }
+    ],
+    "networks": [
+      { "description": "en0", "mac": "a1:b2:c3:d4:e5:f6", "ipaddress": "192.168.1.15", "ipmask": "255.255.255.0", "ipgateway": "192.168.1.1", "ipdhcp": "", "ipsubnet": "192.168.1.0", "speed": "866", "status": "up", "type": "Wi-Fi", "virtualdev": false }
+    ],
+    "videos": [
+      { "name": "Apple M3 Pro GPU", "chipset": "Apple", "memory": 18432 }
+    ],
+    "monitors": [
+      { "caption": "Color LCD", "manufacturer": "Apple", "serial":"" }
+    ],
+    "softwares": [
+      { "name": "Xcode", "version": "16.0", "publisher": "Apple" },
+      { "name": "Docker Desktop", "version": "4.30", "publisher": "Docker" }
+    ],
+    "printers": [],
+    "antivirus": [],
+    "firewalls": [
+      { "profile": "General", "status": "active" }
+    ],
+    "users": [
+      { "LOGIN": "taitrim" }
+    ],
+    "sounds": [
+      { "caption": "Apple Built-in Audio", "manufacturer": "Apple" }
+    ],
+    "accesslog": { "LOGDATE": "2026-07-01 14:00" }
+  }
+}

@@ -120,6 +120,8 @@ function parseFlatInventory(content: Record<string, any>, deviceId: string): Dev
   // --- OS ---
   components.operatingsystem = {
     full_name: os.full_name || os.name || "",
+    name: os.name || "",
+    kernel_name: os.kernel_name || "",
     version: os.version || "",
     kernel_version: os.kernel_version || "",
     build: os.service_pack || "",

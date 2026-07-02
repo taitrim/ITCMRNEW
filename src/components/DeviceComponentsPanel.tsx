@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 /* ===== Types — matches componentsJson from parseFlatInventory --full ===== */
 
 interface CpuEntry { name: string; manufacturer?: string; speed?: number; core?: number; thread?: number; serial?: string; id?: string; }
-interface OsInfo { full_name: string; version?: string; kernel_version?: string; build?: string; arch?: string; install_date?: string; boot_time?: string; timezone?: string; fqdn?: string; }
+interface OsInfo { full_name: string; name?: string; kernel_name?: string; version?: string; kernel_version?: string; build?: string; arch?: string; install_date?: string; boot_time?: string; timezone?: string; fqdn?: string; }
 interface BiosInfo { manufacturer?: string; version?: string; date?: string; system_manufacturer?: string; system_model?: string; motherboard_manufacturer?: string; motherboard_model?: string; }
 interface HwInfo { name?: string; chassis_type?: string; memory?: number; uuid?: string; defaultgateway?: string; dns?: string; lastloggeduser?: string; datelastloggeduser?: string; workgroup?: string; vmsystem?: string; }
 interface LoggedUser { login: string; domain?: string; }
@@ -111,11 +111,11 @@ function OverviewSection({ c }: { c: Components }) {
   const lastUserDate = c.hardware?.datelastloggeduser;
   const loggedUsers = c.users || [];
   // Detect OS from operatingsystem for label
-  const osName = c.operatingsystem?.full_name || "";
-  const isWindows = /windows/i.test(osName);
-  const isLinux = /linux/i.test(osName);
-  const isMacOS = /mac\s*os|darwin/i.test(osName);
-  const osLabel = isWindows ? "Windows" : isLinux ? "Linux" : isMacOS ? "macOS" : "HĐH";
+  const osName = c.operatingsystem?.name || c.operatingsystem?.kernel_name || c.operatingsystem?.full_name || "";
+  const osLabel = /windows/i.test(osName) ? "Windows"
+    : /linux/i.test(osName) ? "Linux"
+    : /mac\s*os|darwin/i.test(osName) ? "macOS"
+    : "HĐH";
 
   return (
     <SectionCard icon="📊" title="Tổng quan">

@@ -260,22 +260,23 @@ export default function DeviceDetailPage() {
   let formFactor: string | null = null;
   let lastLoggedUser: string | null = null;
   let lastLoggedUserDate: string | null = null;
-  let osFullName: string | null = null;
   let loggedUsers: { login: string; domain?: string }[] = [];
+  let osForLabel = "";
   if (d.componentsJson) {
     try {
       const comp = JSON.parse(d.componentsJson);
       formFactor = comp.formFactor || null;
       lastLoggedUser = comp.hardware?.lastloggeduser || null;
       lastLoggedUserDate = comp.hardware?.datelastloggeduser || null;
-      osFullName = comp.operatingsystem?.full_name || null;
       loggedUsers = comp.users || [];
+      // Use name/kernel_name first — more reliable for OS label
+      osForLabel = comp.operatingsystem?.name || comp.operatingsystem?.kernel_name || comp.operatingsystem?.full_name || "";
     } catch {}
   }
-  // Detect OS for label
-  const isWin = /windows/i.test(osFullName || "");
-  const isLinux = /linux/i.test(osFullName || "");
-  const isMac = /mac\s*os|darwin/i.test(osFullName || "");
+  // Detect OS for label (use name/kernel_name first — more reliable across distros)
+  const isWin = /windows/i.test(osForLabel);
+  const isLinux = /linux/i.test(osForLabel);
+  const isMac = /mac\s*os|darwin/i.test(osForLabel);
   const osLabel = isWin ? "Windows" : isLinux ? "Linux" : isMac ? "macOS" : "HĐH";
 
   return (

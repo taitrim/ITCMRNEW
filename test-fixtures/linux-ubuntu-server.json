@@ -1,0 +1,156 @@
+﻿{
+    "action":  "inventory",
+    "deviceid":  "ubuntu-srv01-6.5.0-44-generic-2026-07-01-10-30-00",
+    "content":  {
+                    "hardware":  {
+                                     "name":  "ubuntu-srv01",
+                                     "chassis_type":  "Rack Mount Chassis",
+                                     "memory":  32768,
+                                     "uuid":  "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
+                                     "defaultgateway":  "10.0.1.1",
+                                     "dns":  "10.0.1.2,10.0.1.3",
+                                     "lastloggeduser":  "devops",
+                                     "datelastloggeduser":  "Mon Jul  1 08:45",
+                                     "workgroup":  "",
+                                     "vmsystem":  "Physical"
+                                 },
+                    "bios":  {
+                                 "smanufacturer":  "Dell Inc.",
+                                 "smodel":  "PowerEdge R740",
+                                 "sserial":  "SRV001-JKLM",
+                                 "mmanufacturer":  "Dell Inc.",
+                                 "mmodel":  "0H3T4N",
+                                 "bdate":  "2023-05-15",
+                                 "bversion":  "2.18.1"
+                             },
+                    "operatingsystem":  {
+                                            "full_name":  "Ubuntu 24.04 LTS",
+                                            "kernel_version":  "6.5.0-44-generic",
+                                            "arch":  "64-bit",
+                                            "install_date":  "2024-04-25 10:00:00",
+                                            "boot_time":  "2026-07-01 06:00:00",
+                                            "fqdn":  "ubuntu-srv01.example.com",
+                                            "name":  "Linux",
+                                            "kernel_name":  "linux",
+                                            "version":  "24.04"
+                                        },
+                    "cpus":  [
+                                 {
+                                     "name":  "Intel(R) Xeon(R) Silver 4214R CPU @ 2.40GHz",
+                                     "manufacturer":  "Intel",
+                                     "speed":  2400,
+                                     "core":  12,
+                                     "thread":  24
+                                 }
+                             ],
+                    "memories":  [
+                                     {
+                                         "caption":  "DIMM_A1",
+                                         "numslots":  1,
+                                         "capacity":  32768,
+                                         "type":  "DDR4",
+                                         "speed":  3200,
+                                         "manufacturer":  "Samsung",
+                                         "serialnumber":  "MEM001"
+                                     },
+                                     {
+                                         "caption":  "DIMM_A2",
+                                         "numslots":  2,
+                                         "capacity":  32768,
+                                         "type":  "DDR4",
+                                         "speed":  3200,
+                                         "manufacturer":  "Samsung",
+                                         "serialnumber":  "MEM002"
+                                     }
+                                 ],
+                    "storages":  [
+                                     {
+                                         "model":  "DELL PERC H740P",
+                                         "disksize":  476940,
+                                         "interface":  "SCSI",
+                                         "type":  "SSD",
+                                         "serial":  "SSD_SRV_001",
+                                         "firmware":  "4.68"
+                                     }
+                                 ],
+                    "drives":  [
+                                   {
+                                       "letter":  "/",
+                                       "label":  "root",
+                                       "filesystem":  "ext4",
+                                       "total":  476940,
+                                       "free":  350000,
+                                       "systemdrive":  true
+                                   },
+                                   {
+                                       "letter":  "/home",
+                                       "label":  "home",
+                                       "filesystem":  "ext4",
+                                       "total":  200000,
+                                       "free":  180000
+                                   }
+                               ],
+                    "networks":  [
+                                     {
+                                         "description":  "eno1",
+                                         "mac":  "00:1a:2b:3c:4d:5e",
+                                         "ipaddress":  "10.0.1.10",
+                                         "ipmask":  "255.255.255.0",
+                                         "ipgateway":  "10.0.1.1",
+                                         "ipdhcp":  "",
+                                         "ipsubnet":  "10.0.1.0",
+                                         "speed":  "10000",
+                                         "status":  "up",
+                                         "type":  "ethernet",
+                                         "virtualdev":  false
+                                     }
+                                 ],
+                    "videos":  [
+
+                               ],
+                    "monitors":  [
+
+                                 ],
+                    "softwares":  [
+                                      {
+                                          "name":  "docker-ce",
+                                          "version":  "27.1.1",
+                                          "publisher":  "Docker"
+                                      },
+                                      {
+                                          "name":  "nginx",
+                                          "version":  "1.24.0",
+                                          "publisher":  "Ubuntu"
+                                      }
+                                  ],
+                    "printers":  [
+
+                                 ],
+                    "antivirus":  [
+                                      {
+                                          "name":  "ClamAV",
+                                          "company":  "Cisco",
+                                          "enabled":  true,
+                                          "uptodate":  true,
+                                          "base_version":  "0.104.4"
+                                      }
+                                  ],
+                    "firewalls":  [
+                                      {
+                                          "profile":  "public",
+                                          "status":  "active"
+                                      }
+                                  ],
+                    "users":  [
+                                  {
+                                      "LOGIN":  "devops"
+                                  },
+                                  {
+                                      "LOGIN":  "ansible"
+                                  }
+                              ],
+                    "accesslog":  {
+                                      "LOGDATE":  "2026-07-01 10:30"
+                                  }
+                }
+}
