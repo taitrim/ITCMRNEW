@@ -132,6 +132,8 @@ if defined JSON_FILE (
     curl -X POST -H "Content-Type: application/json" -d @"!JSON_FILE!" "%CRM_URL%"
     echo.
     echo Hoan thanh!
+    :: Xoa output da gui, giu lai agent cho lan sau
+    del "!JSON_FILE!" >nul 2>&1
 ) else (
     echo [LOI] Khong tim thay file JSON tu GLPI Agent.
     echo Kiem tra log:
@@ -143,6 +145,9 @@ if defined JSON_FILE (
 
 if exist agent-log.txt del agent-log.txt >nul 2>&1
 echo.
+echo GLPI Agent da duoc cache tai: %TEMP_DIR%
+echo Lan sau chay se khong can tai lai.
+echo.
 pause`;
 
   // Script Linux (sh) — dùng GLPI Agent AppImage nếu có, fallback tar.gz/installer, cuối cùng fallback manual
@@ -152,335 +157,335 @@ echo ""
 
 CRM_URL="${agentUrl}"
 AGENT_VERSION="${version}"
-TEMP_DIR="/tmp/crm-agent-$$"
+CACHE_DIR="\$HOME/.cache/crm-agent"
+AGENT_DIR="\$CACHE_DIR/agent"
+OUTPUT_DIR="\$CACHE_DIR/output-\$(date +%Y%m%d-%H%M%S)"
 HOSTNAME_FQDN=$(hostname -f 2>/dev/null || hostname)
-OUTPUT_DIR="$TEMP_DIR/output"
 
-# === Buoc 1: Kiem tra / Tai GLPI Agent ===
+# === Buoc 1: Kiem tra / Tai GLPI Agent (cache lau dai, khong tai lai neu da co) ===
 echo "[1/3] Kiem tra GLPI Agent..."
 
-# Tim glpi-agent da cai tren he thong
+mkdir -p "\$AGENT_DIR"
+
+# Tim glpi-agent da cai tren he thong (u tien)
 AGENT=$(which glpi-agent 2>/dev/null || which glpi-agent.pl 2>/dev/null || echo "")
 
-if [ -z "$AGENT" ]; then
-    # Tai GLPI Agent AppImage (portable, khong can cai dat — giong .zip Windows)
+# Neu khong co system agent, kiem tra cache
+if [ -z "\$AGENT" ] && [ -f "\$AGENT_DIR/glpi-agent.AppImage" ]; then
+    AGENT="\$AGENT_DIR/glpi-agent.AppImage"
+    chmod +x "\$AGENT" 2>/dev/null
+    echo "GLPI Agent trong cache: \$AGENT"
+fi
+
+# Neu khong co ca hai, tai ve
+if [ -z "\$AGENT" ]; then
     ARCH=$(uname -m)
-    if [ "$ARCH" = "x86_64" ]; then
+    if [ "\$ARCH" = "x86_64" ]; then
         AGENT_URL="${linuxAppImageUrl}"
     else
-        # ARM64 or other: dung installer Perl
         AGENT_URL="${linuxInstallerUrl}"
     fi
 
-    echo "Dang tai GLPI Agent ${version}..."
-    mkdir -p "$TEMP_DIR"
-
+    echo "Dang tai GLPI Agent \${AGENT_VERSION} cho Linux (\$ARCH)..."
     if command -v curl &>/dev/null; then
-        curl -fSL --progress-bar -o "$TEMP_DIR/agent-download" "$AGENT_URL"
+        curl -fSL --progress-bar -o "\$AGENT_DIR/agent-download" "\$AGENT_URL"
     elif command -v wget &>/dev/null; then
-        wget -q --show-progress -O "$TEMP_DIR/agent-download" "$AGENT_URL"
+        wget -q --show-progress -O "\$AGENT_DIR/agent-download" "\$AGENT_URL"
     fi
 
-    if [ -f "$TEMP_DIR/agent-download" ]; then
-        case "$AGENT_URL" in
+    if [ -f "\$AGENT_DIR/agent-download" ]; then
+        case "\$AGENT_URL" in
             *.AppImage)
-                mv "$TEMP_DIR/agent-download" "$TEMP_DIR/glpi-agent.AppImage"
-                chmod +x "$TEMP_DIR/glpi-agent.AppImage"
-                AGENT="$TEMP_DIR/glpi-agent.AppImage"
+                mv "\$AGENT_DIR/agent-download" "\$AGENT_DIR/glpi-agent.AppImage"
+                chmod +x "\$AGENT_DIR/glpi-agent.AppImage"
+                AGENT="\$AGENT_DIR/glpi-agent.AppImage"
+                echo "Da tai GLPI Agent ve cache (\$AGENT_DIR/)"
                 ;;
             *linux-installer.pl)
-                mv "$TEMP_DIR/agent-download" "$TEMP_DIR/linux-installer.pl"
-                chmod +x "$TEMP_DIR/linux-installer.pl"
-                # Installer: cai dat vao $TEMP_DIR
-                perl "$TEMP_DIR/linux-installer.pl" --prefix "$TEMP_DIR/agent" 2>/dev/null
-                AGENT=$(find "$TEMP_DIR" -name "glpi-agent" -type f 2>/dev/null | head -1)
-                ;;
-            *.tar.gz|*.tgz)
-                tar xzf "$TEMP_DIR/agent-download" -C "$TEMP_DIR" 2>/dev/null
-                AGENT=$(find "$TEMP_DIR" -name "glpi-agent" -type f -o -name "glpi-agent.pl" -type f 2>/dev/null | head -1)
+                mv "\$AGENT_DIR/agent-download" "\$AGENT_DIR/linux-installer.pl"
+                chmod +x "\$AGENT_DIR/linux-installer.pl"
+                perl "\$AGENT_DIR/linux-installer.pl" --prefix "\$AGENT_DIR/installed" 2>/dev/null
+                AGENT=$(find "\$AGENT_DIR" -name "glpi-agent" -type f 2>/dev/null | head -1)
+                [ -z "\$AGENT" ] && AGENT=$(find "\$AGENT_DIR/installed" -name "glpi-agent" -type f 2>/dev/null | head -1)
+                echo "Da cai dat GLPI Agent vao cache (\$AGENT_DIR/)"
                 ;;
         esac
     fi
 fi
 
-if [ -n "$AGENT" ]; then
-    echo "GLPI Agent tim thay tai: $AGENT"
+# === Chay thu thap ===
+if [ -n "\$AGENT" ]; then
+    echo "GLPI Agent: \$AGENT"
     echo ""
     echo "[2/3] Dang thu thap thong tin..."
 
-    mkdir -p "$OUTPUT_DIR"
-    # Chay --full giong Windows de lay day du du lieu (users, storages, networks, etc.)
-    # AppImage: goi truc tiep
-    # Perl agent: goi qua perl
-    case "$AGENT" in
-        *.AppImage)  "$AGENT" --local "$OUTPUT_DIR" --json --full --no-ssl-check 2>&1 ;;
-        *)           perl "$AGENT" --local "$OUTPUT_DIR" --json --full --no-ssl-check 2>&1 ;;
+    mkdir -p "\$OUTPUT_DIR"
+    case "\$AGENT" in
+        *.AppImage)  "\$AGENT" --local "\$OUTPUT_DIR" --json --full --no-ssl-check 2>&1 ;;
+        *)           perl "\$AGENT" --local "\$OUTPUT_DIR" --json --full --no-ssl-check 2>&1 ;;
     esac
 
-    # Tim file JSON output (--full tao 1 file, co the khong co extension)
-    JSON_FILE=$(find "$OUTPUT_DIR" -maxdepth 1 -type f \\( -name "*.json" -o ! -name "*.*" \\) 2>/dev/null | head -1)
+    JSON_FILE=$(find "\$OUTPUT_DIR" -maxdepth 1 -type f \\( -name "*.json" -o ! -name "*.*" \\) 2>/dev/null | head -1)
 
-    if [ -n "$JSON_FILE" ]; then
-        echo "Da thu thap xong: $JSON_FILE"
+    if [ -n "\$JSON_FILE" ]; then
+        echo "Da thu thap xong: \$JSON_FILE (\$(du -h "\$JSON_FILE" | cut -f1))"
         echo ""
         echo "[3/3] Dang gui du lieu len CRM..."
-        curl -s -X POST -H "Content-Type: application/json" -d @"$JSON_FILE" "$CRM_URL" --max-time 60
+        curl -s -X POST -H "Content-Type: application/json" -d @"\$JSON_FILE" "\$CRM_URL" --max-time 60
         echo ""
         echo "Hoan thanh!"
+        # Xoa output cu hon 30 ngay de don dep
+        find "\$CACHE_DIR" -name "output-*" -type d -mtime +30 -exec rm -rf {} \\; 2>/dev/null
     else
         echo "[LOI] Khong tim thay file JSON. Thu --server..."
-        case "$AGENT" in
-            *.AppImage)  "$AGENT" --server "$CRM_URL" --json --no-ssl-check 2>&1 ;;
-            *)           perl "$AGENT" --server "$CRM_URL" --json --no-ssl-check 2>&1 ;;
+        case "\$AGENT" in
+            *.AppImage)  "\$AGENT" --server "\$CRM_URL" --json --no-ssl-check 2>&1 ;;
+            *)           perl "\$AGENT" --server "\$CRM_URL" --json --no-ssl-check 2>&1 ;;
         esac
     fi
 else
-    echo "[CANH BAO] GLPI Agent khong the tai hoac chay."
-    echo "Vui long cai GLPI Agent tu dong:"
-    echo "  Debian/Ubuntu: apt install glpi-agent"
-    echo "  RHEL/CentOS:   yum install glpi-agent"
-    echo "  Hoac tai tai:  https://github.com/glpi-project/glpi-agent/releases"
-    echo ""
-    echo "Dang thu thap thong tin co ban (khong day du)..."
+    echo "[CANH BAO] GLPI Agent khong the tai. Thu thap thong tin co ban..."
 
-    # Fallback: thu thap manual tu /sys, /proc, dmidecode
-    MANUFACTURER=$(cat /sys/class/dmi/id/sys_vendor 2>/dev/null || sudo dmidecode -s system-manufacturer 2>/dev/null || echo "")
-    PRODUCT_NAME=$(cat /sys/class/dmi/id/product_name 2>/dev/null || sudo dmidecode -s system-product-name 2>/dev/null || echo "")
+    mkdir -p "\$OUTPUT_DIR"
+    MANUFACTURER=$(cat /sys/class/dmi/id/sys_vendor 2>/dev/null || echo "")
+    PRODUCT_NAME=$(cat /sys/class/dmi/id/product_name 2>/dev/null || echo "")
     SERIAL=$(cat /sys/class/dmi/id/product_serial 2>/dev/null || cat /sys/class/dmi/id/product_uuid 2>/dev/null || echo "")
     CHASSIS=$(cat /sys/class/dmi/id/chassis_type 2>/dev/null || echo "")
     TOTAL_MEM=$(free -m 2>/dev/null | awk '/^Mem:/{print $2}')
     CPU_NAME=$(grep 'model name' /proc/cpuinfo 2>/dev/null | head -1 | cut -d: -f2 | xargs || echo "")
     OS_NAME=$(cat /etc/os-release 2>/dev/null | grep '^PRETTY_NAME=' | cut -d'"' -f2 || uname -s)
     KERNEL=$(uname -r)
-
-    # Logged-in users (GLPI Agent format)
     LAST_USER=$(last -w 2>/dev/null | grep -vE '^(reboot|shutdown|wtmp)' | head -1 | awk '{print $1}')
     LAST_DATE=$(last -w 2>/dev/null | grep -vE '^(reboot|shutdown|wtmp)' | head -1 | awk '{for(i=4;i<=NF-1;i++) printf $i" "; print ""}' | xargs)
     CURRENT_USERS=$(who 2>/dev/null | awk '{print $1}' | sort -u)
-
-    # Network
     DEFAULT_GW=$(ip route 2>/dev/null | awk '/default/{print $3}' | head -1 || echo "")
     DNS_SERVERS=$(cat /etc/resolv.conf 2>/dev/null | grep '^nameserver' | awk '{print $2}' | paste -sd ',' || echo "")
 
-    # Build flat JSON (GLPI Agent format)
     USERS_JSON=""
-    for u in $CURRENT_USERS; do
-        [ -n "$USERS_JSON" ] && USERS_JSON="$USERS_JSON,"
-        USERS_JSON="$USERS_JSON{\\"LOGIN\\":\\"$u\\"}"
+    for u in \$CURRENT_USERS; do
+        [ -n "\$USERS_JSON" ] && USERS_JSON="\$USERS_JSON,"
+        USERS_JSON="\$USERS_JSON{\\"LOGIN\\":\\"\$u\\"}"
     done
 
-    JSON_FILE="$TEMP_DIR/manual-inventory.json"
-    cat > "$JSON_FILE" << ENDJSON
+    JSON_FILE="\$OUTPUT_DIR/manual-inventory.json"
+    cat > "\$JSON_FILE" << ENDJSON
 {
   "action": "inventory",
   "deviceid": "$HOSTNAME_FQDN-$(uname -r)",
   "content": {
     "hardware": {
       "name": "$HOSTNAME_FQDN",
-      "chassis_type": "$CHASSIS",
-      "memory": $TOTAL_MEM,
-      "uuid": "$SERIAL",
-      "defaultgateway": "$DEFAULT_GW",
-      "dns": "$DNS_SERVERS",
-      "lastloggeduser": "$LAST_USER",
-      "datelastloggeduser": "$LAST_DATE",
+      "chassis_type": "\$CHASSIS",
+      "memory": \$TOTAL_MEM,
+      "uuid": "\$SERIAL",
+      "defaultgateway": "\$DEFAULT_GW",
+      "dns": "\$DNS_SERVERS",
+      "lastloggeduser": "\$LAST_USER",
+      "datelastloggeduser": "\$LAST_DATE",
       "workgroup": "",
       "vmsystem": "Physical"
     },
     "bios": {
-      "smanufacturer": "$MANUFACTURER",
-      "smodel": "$PRODUCT_NAME",
-      "sserial": "$SERIAL"
+      "smanufacturer": "\$MANUFACTURER",
+      "smodel": "\$PRODUCT_NAME",
+      "sserial": "\$SERIAL"
     },
     "operatingsystem": {
       "name": "Linux",
       "kernel_name": "linux",
-      "full_name": "$OS_NAME",
-      "kernel_version": "$KERNEL",
-      "arch": "$(uname -m)"
+      "full_name": "\$OS_NAME",
+      "kernel_version": "\$KERNEL",
+      "arch": "\$(uname -m)"
     },
     "cpus": [
-      { "name": "$CPU_NAME" }
+      { "name": "\$CPU_NAME" }
     ],
-    "users": [$USERS_JSON]
+    "users": [\$USERS_JSON]
   }
 }
 ENDJSON
 
-    echo "[3/3] Dang gui du lieu len CRM..."
-    curl -s -X POST -H "Content-Type: application/json" -d @"$JSON_FILE" "$CRM_URL" --max-time 60
     echo ""
-    echo "Hoan thanh (co ban - khong day du nhu GLPI Agent --full)!"
+    echo "[3/3] Dang gui du lieu len CRM..."
+    curl -s -X POST -H "Content-Type: application/json" -d @"\$JSON_FILE" "\$CRM_URL" --max-time 60
+    echo ""
+    echo "Hoan thanh (co ban)!"
 fi
 
-# Cleanup
-rm -rf "$TEMP_DIR" 2>/dev/null
+# Chi xoa output directory, GIU LAI agent trong cache
+rm -rf "\$OUTPUT_DIR" 2>/dev/null
+echo ""
+echo "GLPI Agent da duoc cache tai: \$AGENT_DIR"
+echo "Lan sau chay se khong can tai lai."
 `;
 
-  // Script macOS (sh) — dùng GLPI Agent --full nếu có, fallback system_profiler
+    // Script macOS (sh) — dùng GLPI Agent --full nếu có, fallback system_profiler
+  const macPkgArm64Url = macPkgUrl.replace(/x86_64/g, 'arm64');
   const macShContent = `#!/bin/bash
 echo "=== CRM - GLPI Agent Inventory (macOS) ==="
 echo ""
 
 CRM_URL="${agentUrl}"
 AGENT_VERSION="${version}"
-AGENT_PKG_X86_64="${macPkgUrl}"
-AGENT_PKG_ARM64="${macPkgUrl.replace(/x86_64/g, 'arm64')}"
-TEMP_DIR="/tmp/crm-agent-$$"
+CACHE_DIR="\$HOME/.cache/crm-agent"
+AGENT_DIR="\$CACHE_DIR/agent"
+OUTPUT_DIR="\$CACHE_DIR/output-\$(date +%Y%m%d-%H%M%S)"
 HOSTNAME_FQDN=$(hostname)
-OUTPUT_DIR="$TEMP_DIR/output"
 
-# === Buoc 1: Kiem tra / Tai GLPI Agent ===
+# === Buoc 1: Kiem tra / Tai GLPI Agent (cache lau dai, khong tai lai neu da co) ===
 echo "[1/3] Kiem tra GLPI Agent..."
 
-# Tim glpi-agent da cai (Homebrew, MacPorts, hoac manual)
+mkdir -p "\$AGENT_DIR"
+
+# Tim glpi-agent da cai tren he thong (Homebrew, MacPorts, manual)
 AGENT=$(which glpi-agent 2>/dev/null || which glpi-agent.pl 2>/dev/null || echo "")
 
-if [ -z "$AGENT" ]; then
-    # macOS: chon PKG dung cho architecture
+# Neu khong co system agent, kiem tra cache
+if [ -z "\$AGENT" ] && [ -f "\$AGENT_DIR/glpi-agent.pl" ]; then
+    AGENT="\$AGENT_DIR/glpi-agent.pl"
+    chmod +x "\$AGENT" 2>/dev/null
+    echo "GLPI Agent trong cache: \$AGENT"
+fi
+
+# Neu khong co ca hai, tai ve
+if [ -z "\$AGENT" ]; then
     ARCH=$(uname -m)
-    if [ "$ARCH" = "x86_64" ]; then
-        AGENT_URL="\${AGENT_PKG_X86_64}"
-    elif [ "$ARCH" = "arm64" ]; then
-        AGENT_URL="\${AGENT_PKG_ARM64}"
+    if [ "\$ARCH" = "x86_64" ]; then
+        AGENT_URL="${macPkgUrl}"
     else
-        AGENT_URL="\${AGENT_PKG_X86_64}"
+        AGENT_URL="${macPkgArm64Url}"
     fi
 
-    echo "Dang tai GLPI Agent \${AGENT_VERSION} cho macOS ($ARCH)..."
-    mkdir -p "$TEMP_DIR"
-
+    echo "Dang tai GLPI Agent \${AGENT_VERSION} cho macOS (\$ARCH)..."
+    mkdir -p "\$AGENT_DIR"
     if command -v curl &>/dev/null; then
-        curl -fSL --progress-bar -o "$TEMP_DIR/agent.pkg" "$AGENT_URL"
+        curl -fSL --progress-bar -o "\$AGENT_DIR/agent.pkg" "\$AGENT_URL"
     fi
 
-    if [ -f "$TEMP_DIR/agent.pkg" ]; then
-        # PKG can be extracted with pkgutil (no sudo needed for expansion)
-        echo "Mo rong PKG..."
-        pkgutil --expand "$TEMP_DIR/agent.pkg" "$TEMP_DIR/pkg-contents" 2>/dev/null
-        AGENT=$(find "$TEMP_DIR/pkg-contents" -name "glpi-agent" -type f -o -name "glpi-agent.pl" -type f 2>/dev/null | head -1)
-        if [ -z "$AGENT" ]; then
-            # Fallback: thu xem co phai tar.gz khong (release cu)
-            tar xzf "$TEMP_DIR/agent.pkg" -C "$TEMP_DIR" 2>/dev/null
-            AGENT=$(find "$TEMP_DIR" -name "glpi-agent" -type f -o -name "glpi-agent.pl" -type f 2>/dev/null | head -1)
+    if [ -f "\$AGENT_DIR/agent.pkg" ]; then
+        echo "Mo rong PKG vao cache..."
+        pkgutil --expand "\$AGENT_DIR/agent.pkg" "\$AGENT_DIR/pkg-contents" 2>/dev/null
+        AGENT=$(find "\$AGENT_DIR/pkg-contents" -name "glpi-agent" -type f -o -name "glpi-agent.pl" -type f 2>/dev/null | head -1)
+        if [ -z "\$AGENT" ]; then
+            tar xzf "\$AGENT_DIR/agent.pkg" -C "\$AGENT_DIR" 2>/dev/null
+            AGENT=$(find "\$AGENT_DIR" -name "glpi-agent" -type f -o -name "glpi-agent.pl" -type f 2>/dev/null | head -1)
         fi
-        [ -n "$AGENT" ] && chmod +x "$AGENT" 2>/dev/null
+        [ -n "\$AGENT" ] && chmod +x "\$AGENT" 2>/dev/null
+        # Rename agent to predictable path
+        if [ -n "\$AGENT" ] && [ "\$AGENT" != "\$AGENT_DIR/glpi-agent.pl" ]; then
+            cp "\$AGENT" "\$AGENT_DIR/glpi-agent.pl" 2>/dev/null
+            AGENT="\$AGENT_DIR/glpi-agent.pl"
+        fi
+        echo "Da tai GLPI Agent ve cache (\$AGENT_DIR/)"
+        rm -f "\$AGENT_DIR/agent.pkg" 2>/dev/null
     fi
 fi
 
-if [ -n "$AGENT" ]; then
-    echo "GLPI Agent tim thay tai: $AGENT"
+# === Chay thu thap ===
+if [ -n "\$AGENT" ]; then
+    echo "GLPI Agent: \$AGENT"
     echo ""
     echo "[2/3] Dang thu thap thong tin..."
 
-    mkdir -p "$OUTPUT_DIR"
-    # Chay --full giong Windows/Linux de lay day du du lieu
-    perl "$AGENT" --local "$OUTPUT_DIR" --json --full --no-ssl-check 2>&1
+    mkdir -p "\$OUTPUT_DIR"
+    perl "\$AGENT" --local "\$OUTPUT_DIR" --json --full --no-ssl-check 2>&1
 
-    # Tim file JSON output (--full tao 1 file, co the khong co extension)
-    JSON_FILE=$(find "$OUTPUT_DIR" -maxdepth 1 -type f \\( -name "*.json" -o ! -name "*.*" \\) 2>/dev/null | head -1)
+    JSON_FILE=$(find "\$OUTPUT_DIR" -maxdepth 1 -type f \\( -name "*.json" -o ! -name "*.*" \\) 2>/dev/null | head -1)
 
-    if [ -n "$JSON_FILE" ]; then
-        echo "Da thu thap xong: $JSON_FILE"
+    if [ -n "\$JSON_FILE" ]; then
+        echo "Da thu thap xong: \$JSON_FILE (\$(du -h "\$JSON_FILE" | cut -f1))"
         echo ""
         echo "[3/3] Dang gui du lieu len CRM..."
-        curl -s -X POST -H "Content-Type: application/json" -d @"$JSON_FILE" "$CRM_URL" --max-time 60
+        curl -s -X POST -H "Content-Type: application/json" -d @"\$JSON_FILE" "\$CRM_URL" --max-time 60
         echo ""
         echo "Hoan thanh!"
+        find "\$CACHE_DIR" -name "output-*" -type d -mtime +30 -exec rm -rf {} \\; 2>/dev/null
     else
-        echo "[LOI] Khong tim thay file JSON tu GLPI Agent."
-        echo "Thu lai voi --server..."
-        perl "$AGENT" --server "$CRM_URL" --json --no-ssl-check 2>&1
+        echo "[LOI] Khong tim thay file JSON. Thu --server..."
+        perl "\$AGENT" --server "\$CRM_URL" --json --no-ssl-check 2>&1
     fi
 else
-    echo "[CANH BAO] GLPI Agent khong the tai hoac chay."
-    echo "Vui long cai GLPI Agent thu cong:"
-    echo "  Homebrew: brew install glpi-agent"
-    echo "  Tai truc tiep: https://github.com/glpi-project/glpi-agent/releases"
-    echo ""
-    echo "Dang thu thap thong tin co ban tu system_profiler..."
+    echo "[CANH BAO] GLPI Agent khong the tai. Thu thap thong tin co ban..."
 
-    # Fallback: Dung system_profiler va lenh macOS
+    mkdir -p "\$OUTPUT_DIR"
     SP_HARDWARE=$(system_profiler SPHardwareDataType 2>/dev/null)
     MANUFACTURER="Apple"
-    MODEL_NAME=$(echo "$SP_HARDWARE" | awk '/Model Name:|^  Model Name:/' | head -1 | cut -d: -f2 | xargs || echo "Mac")
-    SERIAL=$(echo "$SP_HARDWARE" | awk '/Serial Number/{print $NF}' | head -1 || echo "")
-    TOTAL_MEM_MB=$(echo "$SP_HARDWARE" | awk '/Memory:/{print $2}' | head -1 || sysctl -n hw.memsize 2>/dev/null | awk '{print int($1/1024/1024)}')
-    CPU_NAME=$(echo "$SP_HARDWARE" | awk '/Chip:/{sub(/Chip: /,""); print}' | head -1 | xargs || sysctl -n machdep.cpu.brand_string 2>/dev/null || echo "")
-    OS_FULL_NAME=$(sw_vers -productName 2>/dev/null; sw_vers -productVersion 2>/dev/null | xargs || echo "macOS")
+    MODEL_NAME=$(echo "\$SP_HARDWARE" | awk '/Model Name:|^  Model Name:/' | head -1 | cut -d: -f2 | xargs || echo "Mac")
+    SERIAL=$(echo "\$SP_HARDWARE" | awk '/Serial Number/{print \$NF}' | head -1 || echo "")
+    TOTAL_MEM_MB=$(echo "\$SP_HARDWARE" | awk '/Memory:/{print \$2}' | head -1 || sysctl -n hw.memsize 2>/dev/null | awk '{print int(\$1/1024/1024)}')
+    CPU_NAME=$(echo "\$SP_HARDWARE" | awk '/Chip:/{sub(/Chip: /,""); print}' | head -1 | xargs || sysctl -n machdep.cpu.brand_string 2>/dev/null || echo "")
+    OS_FULL_NAME=$(sw_vers -productName 2>/dev/null && echo " \$(sw_vers -productVersion 2>/dev/null)" | xargs || echo "macOS")
     KERNEL=$(uname -r)
+    LAST_USER=$(last 2>/dev/null | grep -vE '^(reboot|shutdown|wtmp)' | head -1 | awk '{print \$1}')
+    LAST_DATE=$(last 2>/dev/null | grep -vE '^(reboot|shutdown|wtmp)' | head -1 | awk '{for(i=4;i<=NF-1;i++) printf \$i" "; print ""}' | xargs)
+    CURRENT_USERS=$(who 2>/dev/null | awk '{print \$1}' | sort -u)
+    DEFAULT_GW=$(route -n get default 2>/dev/null | awk '/gateway:/{print \$2}' | head -1 || echo "")
+    DNS_SERVERS=$(scutil --dns 2>/dev/null | awk '/nameservers/{getline; print \$3}' | head -3 | paste -sd ',' || echo "")
 
-    # Logged-in users (GLPI Agent format)
-    LAST_USER=$(last 2>/dev/null | grep -vE '^(reboot|shutdown|wtmp)' | head -1 | awk '{print $1}')
-    LAST_DATE=$(last 2>/dev/null | grep -vE '^(reboot|shutdown|wtmp)' | head -1 | awk '{for(i=4;i<=NF-1;i++) printf $i" "; print ""}' | xargs)
-    CURRENT_USERS=$(who 2>/dev/null | awk '{print $1}' | sort -u)
-
-    # Network
-    DEFAULT_GW=$(route -n get default 2>/dev/null | awk '/gateway:/{print $2}' | head -1 || echo "")
-    DNS_SERVERS=$(scutil --dns 2>/dev/null | awk '/nameservers/{getline; print $3}' | head -3 | paste -sd ',' || echo "")
-
-    # Detect chassis type from model name
-    if echo "$MODEL_NAME" | grep -qi "book"; then
+    if echo "\$MODEL_NAME" | grep -qi "book"; then
         CHASSIS="Laptop"
-    elif echo "$MODEL_NAME" | grep -qi "mini\|mac\|imac\|studio\|pro"; then
+    elif echo "\$MODEL_NAME" | grep -qi "mini\|mac\|imac\|studio\|pro"; then
         CHASSIS="Desktop"
     else
         CHASSIS="Laptop"
     fi
 
-    # Build flat JSON (GLPI Agent format)
     USERS_JSON=""
-    for u in $CURRENT_USERS; do
-        [ -n "$USERS_JSON" ] && USERS_JSON="$USERS_JSON,"
-        USERS_JSON="$USERS_JSON{\\"LOGIN\\":\\"$u\\"}"
+    for u in \$CURRENT_USERS; do
+        [ -n "\$USERS_JSON" ] && USERS_JSON="\$USERS_JSON,"
+        USERS_JSON="\$USERS_JSON{\\"LOGIN\\":\\"\$u\\"}"
     done
 
-    JSON_FILE="$TEMP_DIR/manual-inventory.json"
-    cat > "$JSON_FILE" << 'ENDJSON'
+    JSON_FILE="\$OUTPUT_DIR/manual-inventory.json"
+    cat > "\$JSON_FILE" << ENDJSON
 {
   "action": "inventory",
-  "deviceid": "'"$HOSTNAME_FQDN-$(uname -r)"'",
+  "deviceid": "\$HOSTNAME_FQDN-\$(uname -r)",
   "content": {
     "hardware": {
-      "name": "'"$HOSTNAME_FQDN"'",
-      "chassis_type": "'"$CHASSIS"'",
-      "memory": '"$TOTAL_MEM_MB"',
-      "uuid": "'"$SERIAL"'",
-      "defaultgateway": "'"$DEFAULT_GW"'",
-      "dns": "'"$DNS_SERVERS"'",
-      "lastloggeduser": "'"$LAST_USER"'",
-      "datelastloggeduser": "'"$LAST_DATE"'",
+      "name": "\$HOSTNAME_FQDN",
+      "chassis_type": "\$CHASSIS",
+      "memory": \$TOTAL_MEM_MB,
+      "uuid": "\$SERIAL",
+      "defaultgateway": "\$DEFAULT_GW",
+      "dns": "\$DNS_SERVERS",
+      "lastloggeduser": "\$LAST_USER",
+      "datelastloggeduser": "\$LAST_DATE",
       "workgroup": "",
       "vmsystem": "Physical"
     },
     "bios": {
-      "smanufacturer": "'"$MANUFACTURER"'",
-      "smodel": "'"$MODEL_NAME"'",
-      "sserial": "'"$SERIAL"'"
+      "smanufacturer": "\$MANUFACTURER",
+      "smodel": "\$MODEL_NAME",
+      "sserial": "\$SERIAL"
     },
     "operatingsystem": {
       "name": "macOS",
       "kernel_name": "darwin",
-      "full_name": "'"$OS_FULL_NAME"'",
-      "kernel_version": "'"$KERNEL"'",
-      "arch": "'"$(uname -m)"'"
+      "full_name": "\$OS_FULL_NAME",
+      "kernel_version": "\$KERNEL",
+      "arch": "\$(uname -m)"
     },
     "cpus": [
-      { "name": "'"$CPU_NAME"'" }
+      { "name": "\$CPU_NAME" }
     ],
-    "users": ['"$USERS_JSON"']
+    "users": [\$USERS_JSON]
   }
 }
 ENDJSON
 
-    echo "[3/3] Dang gui du lieu len CRM..."
-    curl -s -X POST -H "Content-Type: application/json" -d @"$JSON_FILE" "$CRM_URL" --max-time 60
     echo ""
-    echo "Hoan thanh (co ban - khong day du nhu GLPI Agent --full)!"
+    echo "[3/3] Dang gui du lieu len CRM..."
+    curl -s -X POST -H "Content-Type: application/json" -d @"\$JSON_FILE" "\$CRM_URL" --max-time 60
+    echo ""
+    echo "Hoan thanh (co ban)!"
 fi
 
-# Cleanup
-rm -rf "$TEMP_DIR" 2>/dev/null
+# Chi xoa output directory, GIU LAI agent trong cache
+rm -rf "\$OUTPUT_DIR" 2>/dev/null
+echo ""
+echo "GLPI Agent da duoc cache tai: \$AGENT_DIR"
+echo "Lan sau chay se khong can tai lai."
 `;
 
   // Detect OS from user-agent
