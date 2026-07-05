@@ -67,7 +67,7 @@ export function SessionsTab({ customerId }: { customerId: string }) {
         <div className="text-center py-12">
           <span className="text-3xl">📋</span>
           <p className="text-sm text-gray-500 mt-2">Chưa có phiên thu thập nào</p>
-          <p className="text-xs text-gray-400 mt-1">Tạo phiên mới để nhân viên chạy GLPI Agent trên máy khách</p>
+          <p className="text-xs text-gray-400 mt-1">Tạo phiên mới để nhân viên chạy script thu thập thiết bị trên máy khách</p>
         </div>
       ) : (
         <div className="space-y-2">
@@ -109,14 +109,8 @@ function CreateSessionForm({ customerId, addresses, onDone, onCancel }: {
   if (result) {
     const serverUrl = typeof window !== "undefined" ? window.location.origin : "";
     const agentCmd = `glpi-agent --server ${serverUrl}/api/agent-inventory/${result.token} --json`;
-    const scriptUrl = `${serverUrl}/api/agent-inventory/${result.token}/script${selectedOs !== "auto" ? `?os=${selectedOs}` : ""}`;
-
-    const osOptions: Record<string, { label: string; file: string }> = {
-      auto: { label: "Tự động (theo trình duyệt)", file: "" },
-      windows: { label: "Windows", file: "thu-thap.bat" },
-      linux: { label: "Linux", file: "thu-thap-linux.sh" },
-      macos: { label: "macOS", file: "thu-thap-macos.sh" },
-    };
+    const simpleUrl = `${serverUrl}/api/agent-inventory/${result.token}/script?os=${selectedOs}&mode=simple`;
+    const fullUrl = `${serverUrl}/api/agent-inventory/${result.token}/script?os=${selectedOs}`;
 
     return (
       <div className="bg-white rounded-xl border border-border/50 mb-3 overflow-hidden">
@@ -131,9 +125,9 @@ function CreateSessionForm({ customerId, addresses, onDone, onCancel }: {
           <div className="bg-amber-50 rounded-lg p-3">
             <p className="text-[10px] text-amber-800 font-medium mb-1.5">Cách thực hiện</p>
             <ol className="text-[11px] text-amber-700 space-y-1 list-decimal list-inside">
-              <li>Chọn hệ điều hành của máy khách bên dưới → bấm tải script</li>
-              <li>Copy file script vào máy khách (USB / email / mạng nội bộ)</li>
-              <li>Chạy file <strong>{osOptions[selectedOs]?.file || "script"}</strong> trên máy khách</li>
+              <li>Chọn hệ điều hành của máy khách → bấm <strong>Nhanh</strong> (ưu tiên) hoặc <strong>Tải</strong> (dùng GLPI Agent)</li>
+              <li>Copy file .bat vào máy khách (USB / email / mạng nội bộ)</li>
+              <li>Chạy file trên máy khách (click chuột phải → Run as Admin)</li>
             </ol>
             <p className="text-[10px] text-amber-600 mt-1.5">
               Token hết hạn sau 24h. Mỗi token chỉ dùng được <strong>1 lần</strong>.
@@ -144,18 +138,24 @@ function CreateSessionForm({ customerId, addresses, onDone, onCancel }: {
             <label className="text-[10px] text-gray-500">Hệ điều hành máy khách</label>
             <select value={selectedOs} onChange={e => setSelectedOs(e.target.value)}
               className="w-full h-8 px-2 rounded-lg border border-gray-200 text-xs focus:outline-hidden focus:border-blue-400 mt-1">
-              <option value="auto">Tự động (theo trình duyệt của bạn)</option>
-              <option value="windows">Windows → thu-thap.bat</option>
-              <option value="linux">Linux → thu-thap-linux.sh</option>
-              <option value="macos">macOS → thu-thap-macos.sh</option>
+              <option value="windows">Windows (phổ biến)</option>
+              <option value="linux">Linux</option>
+              <option value="macos">macOS</option>
             </select>
           </div>
 
-          <a href={scriptUrl} download
-            className="flex items-center justify-center gap-2 w-full h-10 rounded-xl bg-primary text-white text-sm font-medium hover:bg-primary-600 transition">
-            <Download size={16} />
-            Tải {osOptions[selectedOs]?.file || "script"}
-          </a>
+          <div className="flex gap-2">
+            <a href={simpleUrl} download
+              className="flex-1 flex items-center justify-center gap-2 h-10 rounded-xl bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 transition">
+              <Download size={16} />
+              Nhanh (không cần GLPI Agent)
+            </a>
+            <a href={fullUrl} download
+              className="flex-1 flex items-center justify-center gap-2 h-10 rounded-xl bg-primary text-white text-sm font-medium hover:bg-primary-600 transition">
+              <Download size={16} />
+              Tải (GLPI Agent)
+            </a>
+          </div>
 
           <details className="text-center">
             <summary className="text-[10px] text-gray-400 cursor-pointer hover:text-gray-600">
@@ -165,11 +165,6 @@ function CreateSessionForm({ customerId, addresses, onDone, onCancel }: {
               <CopyField value={agentCmd} />
             </div>
           </details>
-
-          <div className="flex items-center gap-2">
-            <RefreshCw size={12} className="text-gray-400 animate-spin" />
-            <span className="text-[10px] text-gray-500">Đang chờ GLPI Agent gửi inventory...</span>
-          </div>
 
           <div className="flex gap-2">
             <button onClick={onDone}
@@ -209,8 +204,8 @@ function CreateSessionForm({ customerId, addresses, onDone, onCancel }: {
 
         <div className="bg-amber-50 rounded-lg p-2.5">
           <p className="text-[10px] text-amber-700">
-            Sau khi tạo, bạn sẽ nhận được lệnh để chạy GLPI Agent trên máy khách.
-            Lệnh này chỉ dùng được <strong>1 lần</strong> và hết hạn sau 24h.
+            Sau khi tạo, bạn sẽ tải script chạy trên máy khách.
+            Mỗi token chỉ dùng được <strong>1 lần</strong> và hết hạn sau 24h.
           </p>
         </div>
 
@@ -227,7 +222,7 @@ function CreateSessionForm({ customerId, addresses, onDone, onCancel }: {
 /* ===== Session Card ===== */
 function SessionCard({ session, onRefresh }: { session: Session; onRefresh: () => void }) {
   const [copied, setCopied] = useState(false);
-  const [selectedOs, setSelectedOs] = useState("auto");
+  const [selectedOs, setSelectedOs] = useState("windows");
 
   const statusConfig: Record<string, { label: string; color: string; bg: string }> = {
     pending: { label: "Chờ chạy", color: "text-amber-700", bg: "bg-amber-100" },
@@ -287,20 +282,19 @@ function SessionCard({ session, onRefresh }: { session: Session; onRefresh: () =
                 <div className="flex gap-1.5">
                   <select value={selectedOs} onChange={e => setSelectedOs(e.target.value)}
                     className="h-7 px-2 rounded-lg border border-gray-200 text-[10px] focus:outline-hidden focus:border-blue-400 flex-1 min-w-0">
-                    <option value="auto">Tự động</option>
-                    <option value="windows">Windows</option>
+                    <option value="windows">Windows (phổ biến)</option>
                     <option value="linux">Linux</option>
                     <option value="macos">macOS</option>
                   </select>
-                  <a href={`${serverUrl}/api/agent-inventory/${session.token}/script${selectedOs !== "auto" ? `?os=${selectedOs}` : ""}`} download
-                    className="flex items-center gap-1 h-7 px-3 rounded-lg bg-primary text-white text-[10px] font-medium hover:bg-primary-600 transition shrink-0">
-                    <Download size={11} />
-                    Tải
-                  </a>
-                  <a href={`${serverUrl}/api/agent-inventory/${session.token}/script${selectedOs !== "auto" ? `?os=${selectedOs}&mode=simple` : "?mode=simple"}`} download
+                  <a href={`${serverUrl}/api/agent-inventory/${session.token}/script?os=${selectedOs}&mode=simple`} download
                     className="flex items-center gap-1 h-7 px-3 rounded-lg bg-emerald-600 text-white text-[10px] font-medium hover:bg-emerald-700 transition shrink-0">
                     <Download size={11} />
                     Nhanh
+                  </a>
+                  <a href={`${serverUrl}/api/agent-inventory/${session.token}/script?os=${selectedOs}`} download
+                    className="flex items-center gap-1 h-7 px-3 rounded-lg bg-primary text-white text-[10px] font-medium hover:bg-primary-600 transition shrink-0">
+                    <Download size={11} />
+                    Tải
                   </a>
                   <button onClick={copyCmd}
                     className="h-7 px-3 rounded-lg bg-gray-100 text-gray-500 text-[10px] hover:bg-gray-200 transition shrink-0">

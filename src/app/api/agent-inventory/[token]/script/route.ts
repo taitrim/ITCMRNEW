@@ -157,6 +157,13 @@ set "AGENT_VERSION=${version}"
 set "AGENT_ZIP_URL=${winZipUrl}"
 set "TEMP_DIR=glpi-agent-temp"
 set "AGENT_EXE="
+set "LOG_FILE=crm-agent-%COMPUTERNAME%.log"
+
+:: Ghi tat ca output vao log file
+echo ============================================ > "%LOG_FILE%"
+echo   CRM Agent - GLPI Agent Inventory >> "%LOG_FILE%"
+echo   Started: %DATE% %TIME% >> "%LOG_FILE%"
+echo ============================================ >> "%LOG_FILE%"
 
 echo ============================================
 echo   CRM Agent - GLPI Agent Inventory
@@ -165,6 +172,7 @@ echo.
 
 :: === Buoc 1: Tim / Tai GLPI Agent ===
 echo Step 1/3: Checking for GLPI Agent...
+echo [1/3] Checking for GLPI Agent... >> "%LOG_FILE%"
 
 :: Search cache for glpi-agent.bat or glpi-agent.pl
 for /f "delims=" %%f in ('dir /s /b "%TEMP_DIR%\\glpi-agent.bat" 2^>nul') do set "AGENT_EXE=%%f"
@@ -173,6 +181,7 @@ if not defined AGENT_EXE (
 )
 if defined AGENT_EXE (
     echo Found cached: !AGENT_EXE!
+    echo Found cached: !AGENT_EXE! >> "%LOG_FILE%"
     goto :run_agent
 )
 
@@ -180,22 +189,29 @@ if defined AGENT_EXE (
 if not exist "%TEMP_DIR%" mkdir "%TEMP_DIR%"
 
 echo Downloading GLPI Agent %AGENT_VERSION% (31MB) - please wait...
-curl -fSL --progress-bar -o "%TEMP_DIR%\\agent.zip" "%AGENT_ZIP_URL%"
+echo Downloading %AGENT_ZIP_URL% >> "%LOG_FILE%"
+
+:: Thu curl truoc
+curl -fSL --progress-bar -o "%TEMP_DIR%\\agent.zip" "%AGENT_ZIP_URL%" 2>>"%LOG_FILE%"
 if %errorlevel% neq 0 (
-    echo Retrying with PowerShell...
-    powershell -Command "Invoke-WebRequest -Uri '%AGENT_ZIP_URL%' -OutFile '%TEMP_DIR%\\agent.zip'" >nul 2>&1
+    echo curl failed, retrying with PowerShell...
+    echo curl failed, retrying with PowerShell... >> "%LOG_FILE%"
+    powershell -Command "Invoke-WebRequest -Uri '%AGENT_ZIP_URL%' -OutFile '%TEMP_DIR%\\agent.zip'" >>"%LOG_FILE%" 2>&1
 )
 
 if not exist "%TEMP_DIR%\\agent.zip" (
+    echo.
     echo [ERROR] Cannot download GLPI Agent. Check internet connection.
+    echo [ERROR] Cannot download GLPI Agent >> "%LOG_FILE%"
     echo.
     echo Manual download: %AGENT_ZIP_URL%
-    pause
-    exit /b 1
+    echo.
+    goto :end
 )
 
 echo Extracting...
-powershell -Command "Expand-Archive -Path '%TEMP_DIR%\\agent.zip' -DestinationPath '%TEMP_DIR%' -Force" >nul 2>&1
+echo Extracting... >> "%LOG_FILE%"
+powershell -Command "Expand-Archive -Path '%TEMP_DIR%\\agent.zip' -DestinationPath '%TEMP_DIR%' -Force" >>"%LOG_FILE%" 2>&1
 del "%TEMP_DIR%\\agent.zip" >nul 2>&1
 
 :: Find glpi-agent.bat or .pl
@@ -205,19 +221,24 @@ if not defined AGENT_EXE (
 )
 
 if not defined AGENT_EXE (
-    echo [ERROR] Cannot find glpi-agent after extraction.
     echo.
-    echo Contents of %TEMP_DIR%:
+    echo [ERROR] Cannot find glpi-agent after extraction.
+    echo [ERROR] Cannot find glpi-agent >> "%LOG_FILE%"
+    echo.
+    echo Contents:
     dir /s "%TEMP_DIR%"
-    pause
-    exit /b 1
+    dir /s "%TEMP_DIR%" >> "%LOG_FILE%"
+    echo.
+    goto :end
 )
 echo Found: !AGENT_EXE!
+echo Found: !AGENT_EXE! >> "%LOG_FILE%"
 
 :: === Buoc 2: Chay GLPI Agent ===
 :run_agent
 echo.
 echo Step 2/3: Collecting inventory (takes ~1 min)...
+echo [2/3] Running GLPI Agent... >> "%LOG_FILE%"
 
 set "BASE_DIR=%~dp0"
 set "OUTPUT_DIR=%BASE_DIR%%TEMP_DIR%\\output"
@@ -225,42 +246,73 @@ if not exist "%OUTPUT_DIR%" mkdir "%OUTPUT_DIR%" >nul 2>&1
 
 cd /d "%BASE_DIR%"
 echo Running: !AGENT_EXE! --local "%OUTPUT_DIR%" --json --full
-"!AGENT_EXE!" --local "%OUTPUT_DIR%" --json --full --logfile agent-log.txt
+echo CMD: !AGENT_EXE! --local "%OUTPUT_DIR%" --json --full >> "%LOG_FILE%"
+"!AGENT_EXE!" --local "%OUTPUT_DIR%" --json --full --logfile agent-log.txt 2>>"%LOG_FILE%"
 set "EXIT_CODE=%ERRORLEVEL%"
 echo Agent exit code: %EXIT_CODE%
+echo Agent exit code: %EXIT_CODE% >> "%LOG_FILE%"
 
 :: Wait for file to be written
 ping -n 4 127.0.0.1 >nul 2>&1
 
 :: Find output JSON file
 set "JSON_FILE="
-for /f "delims=" %%f in ('dir /b "%OUTPUT_DIR%\\*.json" 2^>nul') do set "JSON_FILE=%OUTPUT_DIR%\\%%f"
-if not defined JSON_FILE (
-    for /f "delims=" %%f in ('dir /b /a-d "%OUTPUT_DIR%" 2^>nul') do set "JSON_FILE=%OUTPUT_DIR%\\%%f"
+for /f "delims=" %%f in ('dir /b "%OUTPUT_DIR%" 2^>nul') do (
+    if not defined JSON_FILE set "JSON_FILE=%OUTPUT_DIR%\\%%f"
 )
 
+echo Files found in output dir: >> "%LOG_FILE%"
+dir /b "%OUTPUT_DIR%" >> "%LOG_FILE%" 2>&1
+
 if not defined JSON_FILE (
+    echo.
     echo [ERROR] No output file found from GLPI Agent.
+    echo [ERROR] No output file >> "%LOG_FILE%"
     if exist agent-log.txt (
         echo.
         echo Agent log:
         type agent-log.txt
+        echo --- agent-log.txt --- >> "%LOG_FILE%"
+        type agent-log.txt >> "%LOG_FILE%"
     )
     echo.
     echo Output directory contents:
     dir /s "%OUTPUT_DIR%" 2>nul
-    pause
-    exit /b 1
+    dir /s "%OUTPUT_DIR%" >> "%LOG_FILE%" 2>&1
+    echo.
+    goto :end
 )
 
 echo Collected: !JSON_FILE!
+echo Collected: !JSON_FILE! >> "%LOG_FILE%"
 echo.
 echo Step 3/3: Sending to CRM...
-curl -s -X POST -H "Content-Type: application/json" -d @"!JSON_FILE!" "%CRM_URL%" --max-time 60
+echo [3/3] Sending to CRM >> "%LOG_FILE%"
+
+:: Doc file bang PowerShell de tranh loi path co spaces
+for /f "delims=" %%i in ("!JSON_FILE!") do set "JSON_NAME=%%~nxi"
+set "JSON_CONTENT="
+powershell -Command "$c = Get-Content -Raw '!JSON_FILE!'; try { Invoke-WebRequest -Uri '%CRM_URL%' -Method POST -ContentType 'application/json' -Body $c -UseBasicParsing | ForEach-Object { $_.StatusCode } } catch { Write-Output 'FAIL:' $_.Exception.Message }" 2>>"%LOG_FILE%"
 echo.
 echo Done!
+echo Done! >> "%LOG_FILE%"
 del "!JSON_FILE!" >nul 2>&1
 if exist agent-log.txt del agent-log.txt >nul 2>&1
+echo.
+echo ============================================
+echo Completed: %DATE% %TIME%
+echo Log saved to: %CD%\%LOG_FILE%
+echo ============================================
+echo.
+pause
+goto :eof
+
+:end
+echo.
+echo ============================================
+echo FAILED: %DATE% %TIME%
+echo Check log: %CD%\%LOG_FILE%
+echo ============================================
 echo.
 pause`;
 
