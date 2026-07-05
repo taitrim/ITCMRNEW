@@ -122,8 +122,28 @@ test.describe('Agent Flow (customer key-based)', () => {
     // Verify agent config
     await expect(page.locator('text=Cấu hình Agent')).toBeVisible({ timeout: 10_000 });
 
+    // Verify mode selector buttons
+    await expect(page.locator('button', { hasText: 'Đầy đủ (GLPI Agent)' })).toBeVisible({ timeout: 5_000 });
+    await expect(page.locator('button', { hasText: 'Nhanh (PowerShell)' })).toBeVisible({ timeout: 5_000 });
+
+    // Switch to Simple mode and check URL changes
+    await page.locator('button', { hasText: 'Nhanh (PowerShell)' }).click();
+    await expect(page.locator('a[href*="mode=simple"]')).toBeVisible({ timeout: 3_000 });
+
+    // Switch back to GLPI mode, check OS selector appears
+    await page.locator('button', { hasText: 'Đầy đủ (GLPI Agent)' }).click();
+    await expect(page.locator('button', { hasText: 'Windows' })).toBeVisible({ timeout: 3_000 });
+    await expect(page.locator('button', { hasText: 'Linux' })).toBeVisible({ timeout: 3_000 });
+    await expect(page.locator('button', { hasText: 'macOS' })).toBeVisible({ timeout: 3_000 });
+
+    // Verify download URL includes mode and os params
+    const downloadLink = page.locator('a[href*="/api/agent-inventory/download/"]').first();
+    const href = await downloadLink.getAttribute('href');
+    expect(href).toContain('mode=');
+    expect(href).toContain('os=');
+
     // Verify download button exists
-    await expect(page.locator('a[href*="/api/agent-inventory/download/"]')).toBeVisible({ timeout: 5_000 });
+    await expect(downloadLink).toBeVisible({ timeout: 3_000 });
 
     // Check agent-updates list page
     await page.goto('/agent-updates');
