@@ -104,6 +104,28 @@ echo.
 echo Step 1/3: Checking for GLPI Agent...
 echo [1/3] Checking for GLPI Agent... >> "%LOG_FILE%"
 
+:: Check system-wide installation truoc (GLPI Agent da duoc cai dat)
+echo Checking system installation...
+where glpi-agent.bat 2>nul
+if %errorlevel% equ 0 (
+    for /f "delims=" %%f in ('where glpi-agent.bat 2^>nul') do set "AGENT_EXE=%%f"
+)
+if not defined AGENT_EXE (
+    if exist "C:\Program Files\GLPI-Agent\glpi-agent.bat" set "AGENT_EXE=C:\Program Files\GLPI-Agent\glpi-agent.bat"
+)
+if not defined AGENT_EXE (
+    if exist "C:\Program Files (x86)\GLPI-Agent\glpi-agent.bat" set "AGENT_EXE=C:\Program Files (x86)\GLPI-Agent\glpi-agent.bat"
+)
+if not defined AGENT_EXE (
+    if exist "%ProgramFiles%\GLPI-Agent\glpi-agent.bat" set "AGENT_EXE=%ProgramFiles%\GLPI-Agent\glpi-agent.bat"
+)
+if defined AGENT_EXE (
+    echo Found installed: !AGENT_EXE!
+    echo Found installed: !AGENT_EXE! >> "%LOG_FILE%"
+    goto :run_agent
+)
+
+:: Check cache (GLPI Agent portable da duoc tai truoc do)
 for /f "delims=" %%f in ('dir /s /b "%TEMP_DIR%\\glpi-agent.bat" 2^>nul') do set "AGENT_EXE=%%f"
 if not defined AGENT_EXE (
   for /f "delims=" %%f in ('dir /s /b "%TEMP_DIR%\\glpi-agent.pl" 2^>nul') do set "AGENT_EXE=%%f"
