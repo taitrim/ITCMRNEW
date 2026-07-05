@@ -102,7 +102,10 @@ export async function GET(
   const baseUrl = `${proto}://${host}`;
   const agentUrl = `${baseUrl}/api/agent-inventory/submit?customerId=${customerId}&key=${customer.agentKey}`;
 
-  const script = createAgentScript(agentUrl, customerId);
+  // Windows batch: `&` là command separator → escape thành `^&` để echo ra .ps1 đúng
+  const batchSafeUrl = agentUrl.replace(/&/g, "^&");
+
+  const script = createAgentScript(batchSafeUrl, customerId);
   const filename = `crm-agent-${customer.name?.replace(/[^a-zA-Z0-9]/g, "_") || "inventory"}.bat`;
 
   return new Response(script, {
