@@ -61,25 +61,36 @@ function parsePowerShellPayload(body: Record<string, unknown>): DeviceRecord[] {
   const users = Array.isArray(content.users) ? content.users : [];
   const loggedUser = users.map((u: any) => u.LOGIN || u.login || "").filter(Boolean).join("; ");
 
-  // Build components JSON
-  const components: Record<string, any> = {
-    cpus: cpus.map((p: any) => ({ name: p.name, speed: p.speed })),
-    storages: storages.map((s: any) => ({
-      model: s.model || s.name || "", disksize: s.disksize || 0,
-      interface: s.interface || "", type: s.type || "",
-    })),
-    networks: nets.map((n: any) => ({
-      description: n.description || n.name || "",
-      mac: macAddress, ipaddress: ipAddress,
-    })),
-    hardware: {
-      name: hw.name || "", chassis_type: hw.chassis_type || "",
-      memory: hw.memory || 0, uuid: hw.uuid || "",
-      lastloggeduser: hw.lastloggeduser || "",
-    },
-    os: { full_name: os.full_name || os.name || "" },
-    users: users.map((u: any) => ({ login: u.LOGIN || u.login || "" })),
+  // Build components JSON — include ALL content sections for DeviceComponentsPanel display
+  // (softwares, antivirus, monitors, printers, memories, usbdevices, etc.)
+  const components: Record<string, any> = {};
+  for (const [key, value] of Object.entries(content)) {
+    if (value === null || value === undefined) continue;
+    components[key] = value; // keep all original keys (operatingsystem, bios, etc.)
+  }
+  // 'os' alias for backward compat with DeviceComponentsPanel (uses c.operatingsystem)
+  if (content.operatingsystem) components.os = content.operatingsystem;
+  // Override with enriched field mappings
+  components.cpus = cpus.map((p: any) => ({
+    name: p.name, manufacturer: p.manufacturer, speed: p.speed,
+    core: p.core, thread: p.thread, serial: p.serial, id: p.id,
+  }));
+  components.storages = storages.map((s: any) => ({
+    model: s.model || s.name || "", disksize: s.disksize || 0,
+    interface: s.interface || "", type: s.type || "",
+    serial: s.serial || "", firmware: s.firmware || "",
+    manufacturer: s.manufacturer || "", description: s.description || "",
+  }));
+  components.hardware = {
+    name: hw.name || "", chassis_type: hw.chassis_type || "",
+    memory: hw.memory || 0, uuid: hw.uuid || "",
+    defaultgateway: hw.defaultgateway || "", dns: hw.dns || "",
+    lastloggeduser: hw.lastloggeduser || "",
+    workgroup: hw.workgroup || "", vmsystem: hw.vmsystem || "",
   };
+  components.users = users.map((u: any) => ({
+    login: u.LOGIN || u.login || "", domain: u.domain || "",
+  }));
   const componentsJson = JSON.stringify(components);
 
   const deviceType = (hw.chassis_type || "").toLowerCase() === "laptop" ? "laptop" : "computer";

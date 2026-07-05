@@ -2,7 +2,8 @@
 
 import { use, useState, useCallback, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Check, X, AlertTriangle, Monitor, Printer, HelpCircle } from "lucide-react";
+import { ArrowLeft, Check, X, AlertTriangle, Monitor, Printer, HelpCircle, ChevronDown, ChevronRight } from "lucide-react";
+import DeviceComponentsPanel from "@/components/DeviceComponentsPanel";
 
 /* ===== Types (same as old review) ===== */
 type MatchResult = {
@@ -58,6 +59,8 @@ function DeviceRow({ device, index, checked, onToggle }: {
   const { parsed, match } = device;
   const type = (parsed.deviceType as string) || "computer";
   const isComputer = ["computer","desktop","laptop","server","aio","tablet"].includes(type);
+  const [showFullInv, setShowFullInv] = useState(false);
+  const componentsJson = parsed.componentsJson as string | undefined;
 
   return (
     <div className={`rounded-lg border ${checked ? "border-blue-300 bg-blue-50/40" : "border-gray-200 bg-white"}`}>
@@ -106,6 +109,21 @@ function DeviceRow({ device, index, checked, onToggle }: {
           </>
         )}
       </div>
+
+      {componentsJson && (
+        <div className="border-t border-gray-100">
+          <button onClick={() => setShowFullInv(!showFullInv)}
+            className="flex items-center gap-1.5 w-full px-3 py-2 text-[11px] text-gray-500 hover:text-gray-700 hover:bg-gray-50 transition-colors">
+            {showFullInv ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+            {showFullInv ? "Ẩn chi tiết linh kiện" : "Xem chi tiết linh kiện đầy đủ"}
+          </button>
+          {showFullInv && (
+            <div className="px-3 pb-3">
+              <DeviceComponentsPanel componentsJson={componentsJson} />
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
