@@ -8159,6 +8159,10 @@ model Customer {
   isCodeAuto Boolean          @default(true)
   isDeleted  Boolean          @default(false)
 
+  /// Khoá API cho Agent tự động thu thập thiết bị
+  agentKey     String   @unique
+  agentEnabled Boolean  @default(true)
+
   /// Công ty con phụ trách khách hàng này
   responsibleCompanyId String?
   responsibleCompany   Customer? @relation("ResponsibleCompany", fields: [responsibleCompanyId], references: [id])
@@ -8177,6 +8181,7 @@ model Customer {
   items     CustomerItem[]
   devices   CustomerCollectedDevice[]
   sessions  CollectionSession[]
+  submissions InventorySubmission[]
 }
 
 /// Địa chỉ khách hàng (1 KH có nhiều địa chỉ)
@@ -8310,14 +8315,22 @@ model CustomerCollectedDevice {
   notes           String?
   collectedById   String?  // User ID (không dùng relation để tránh sửa Users model)
   collectedAt     DateTime @default(now())
-  sessionId       String?  // CollectionSession ID (nếu thu thập qua GLPI Agent)
+
+  /// Nguồn dữ liệu: 'manual' | 'agent' (hiển thị badge)
+  source          String   @default("manual")
+
+  /// Liên kết đến phiên cũ (tương thích ngược)
+  sessionId       String?
   session         CollectionSession? @relation(fields: [sessionId], references: [id])
+  /// Liên kết đến submission mới
+  submissionId    String?
+  submission      InventorySubmission? @relation(fields: [submissionId], references: [id])
 
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 }
 
-/// Phiên thu thập thiết bị qua GLPI Agent
+/// Phiên thu thập thiết bị qua GLPI Agent (deprecated, giữ cho tương thích ngược)
 model CollectionSession {
   id            String   @id @default(cuid())
   customerId    String
@@ -8343,6 +8356,34 @@ model CollectionSession {
 
   @@index([customerId])
   @@index([token])
+}
+
+/// Đợt gửi dữ liệu từ Agent (thay thế CollectionSession cho flow mới)
+model InventorySubmission {
+  id         String   @id @default(cuid())
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  /// Dữ liệu gốc từ Agent (JSON string, parsed content)
+  rawPayload String?
+  reviewData String?  // JSON: parsed devices + match results (chờ user duyệt)
+
+  /// Trạng thái: pending | approved | rejected
+  status       String @default("pending")
+  deviceCount  Int    @default(0)
+
+  /// Người duyệt
+  reviewedById String? // User ID
+  reviewedAt   DateTime?
+  approvedAt   DateTime?
+
+  devices     CustomerCollectedDevice[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([customerId])
+  @@index([status])
 }
 
 // CUSTOMER_END

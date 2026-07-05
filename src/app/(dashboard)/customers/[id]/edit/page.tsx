@@ -13,7 +13,7 @@ export default function EditCustomerPage() {
   const [categories, setCategories] = useState<{ id: string; name: string }[]>([]);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [form, setForm] = useState({ name: "", shortName: "", categoryId: "", taxCode: "", website: "", phone: "", email: "", note: "" });
+  const [form, setForm] = useState({ name: "", shortName: "", categoryId: "", taxCode: "", website: "", phone: "", email: "", note: "", agentEnabled: true });
 
   useEffect(() => {
     if (status !== "loading" && !session?.user) router.replace("/login");
@@ -29,7 +29,7 @@ export default function EditCustomerPage() {
       setForm({
         name: c.name || "", shortName: c.shortName || "", categoryId: c.categoryId || "",
         taxCode: c.taxCode || "", website: c.website || "", phone: c.phone || "",
-        email: c.email || "", note: c.note || "",
+        email: c.email || "", note: c.note || "", agentEnabled: c.agentEnabled !== false,
       });
       setLoading(false);
     });
@@ -91,7 +91,18 @@ export default function EditCustomerPage() {
             <div><label className="text-xs font-medium text-muted-foreground mb-1 block">Số điện thoại</label>{input(form.phone, (v) => setForm({ ...form, phone: v }))}</div>
             <div><label className="text-xs font-medium text-muted-foreground mb-1 block">Email</label>{input(form.email, (v) => setForm({ ...form, email: v }))}</div>
             <div className="col-span-2"><label className="text-xs font-medium text-muted-foreground mb-1 block">Website</label>{input(form.website, (v) => setForm({ ...form, website: v }))}</div>
-            <div className="col-span-2">
+            <div className="col-span-2 flex items-center justify-between py-2 border-t border-gray-100">
+              <div>
+                <label className="text-xs font-medium text-muted-foreground">Agent Script</label>
+                <p className="text-[10px] text-gray-400">Cho phép thu thập thiết bị từ xa qua Agent</p>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input type="checkbox" checked={form.agentEnabled} onChange={(e) => setForm({ ...form, agentEnabled: e.target.checked })}
+                  className="sr-only peer" />
+                <div className="w-9 h-5 bg-gray-200 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
+              </label>
+            </div>
+          <div className="col-span-2">
               <label className="text-xs font-medium text-muted-foreground mb-1 block">Ghi chú</label>
               <textarea value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })}
                 className="w-full h-20 px-3 py-2 text-sm rounded-lg border border-border bg-white focus:outline-hidden focus:ring-2 focus:ring-primary/20 resize-none" />

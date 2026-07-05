@@ -1,54 +1,44 @@
 "use client";
 
-import { use, useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect } from "react";
 import Link from "next/link";
 import {
   Monitor, Clock, CheckCircle, XCircle, AlertTriangle,
-  ChevronRight, Eye, RefreshCw
+  ChevronRight, Eye, RefreshCw, Download
 } from "lucide-react";
 
 /* ===== Types ===== */
-
-type SessionSummary = {
+type Submission = {
   id: string;
-  token: string;
+  customerId: string;
+  customerName: string;
   status: string;
   deviceCount: number;
-  errorMessage: string | null;
   createdAt: string;
-  completedAt: string | null;
-  customerId: string;
-  customer: { id: string; name: string; code: string } | null;
-  address: { id: string; label: string | null } | null;
-  _count: { devices: number };
 };
 
 /* ===== Status config ===== */
-
-const statusCfg: Record<string, { label: string; color: string; bg: string; icon: any }> = {
-  pending: { label: "Chờ chạy", color: "text-amber-700", bg: "bg-amber-100", icon: Clock },
-  active: { label: "Đang thu thập", color: "text-blue-700", bg: "bg-blue-100", icon: RefreshCw },
-  data_received: { label: "Chờ duyệt", color: "text-purple-700", bg: "bg-purple-100", icon: Eye },
-  completed: { label: "Hoàn tất", color: "text-green-700", bg: "bg-green-100", icon: CheckCircle },
-  failed: { label: "Lỗi", color: "text-red-700", bg: "bg-red-100", icon: XCircle },
+const statusCfg: Record<string, { label: string; color: string; bg: string }> = {
+  pending: { label: "Chờ duyệt", color: "text-purple-700", bg: "bg-purple-100" },
+  approved: { label: "Đã duyệt", color: "text-green-700", bg: "bg-green-100" },
+  rejected: { label: "Từ chối", color: "text-red-700", bg: "bg-red-100" },
 };
 
 /* ===== Page ===== */
-
 export default function AgentUpdatesPage() {
-  const [sessions, setSessions] = useState<SessionSummary[]>([]);
+  const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<string>("all");
 
-  const loadSessions = useCallback(async () => {
+  const loadSubmissions = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/agent-inventory/list");
+      const res = await fetch("/api/agent-inventory/submissions");
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = await res.json();
-      setSessions(json.sessions || []);
+      setSubmissions(json.data || []);
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -56,26 +46,21 @@ export default function AgentUpdatesPage() {
     }
   }, []);
 
-  useEffect(() => { loadSessions(); }, []);
+  useEffect(() => { loadSubmissions(); }, []);
 
   // Filter
-  const filtered = sessions.filter(s => {
+  const filtered = submissions.filter(s => {
     if (filter === "all") return true;
-    if (filter === "pending") return s.status === "pending";
-    if (filter === "data_received") return s.status === "data_received";
-    if (filter === "completed") return s.status === "completed";
-    if (filter === "failed") return s.status === "failed";
-    return true;
+    return s.status === filter;
   });
 
   // Stats
   const stats = {
-    total: sessions.length,
-    pending: sessions.filter(s => s.status === "pending").length,
-    data_received: sessions.filter(s => s.status === "data_received").length,
-    completed: sessions.filter(s => s.status === "completed").length,
-    failed: sessions.filter(s => s.status === "failed").length,
-    totalDevices: sessions.reduce((sum, s) => sum + s.deviceCount + s._count.devices, 0),
+    total: submissions.length,
+    pending: submissions.filter(s => s.status === "pending").length,
+    approved: submissions.filter(s => s.status === "approved").length,
+    rejected: submissions.filter(s => s.status === "rejected").length,
+    totalDevices: submissions.reduce((sum, s) => sum + s.deviceCount, 0),
   };
 
   return (
@@ -84,7 +69,7 @@ export default function AgentUpdatesPage() {
       <div className="mb-5">
         <h1 className="text-xl font-semibold text-gray-900">Cập nhật Agent</h1>
         <p className="text-xs text-gray-400 mt-0.5">
-          Danh sách các phiên thu thập thiết bị từ GLPI Agent
+          Dữ liệu thiết bị gửi về từ Agent Script tại khách hàng
         </p>
       </div>
 
@@ -94,24 +79,20 @@ export default function AgentUpdatesPage() {
           className={`px-3 py-1.5 rounded-lg transition ${filter === "all" ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}>
           Tất cả <span className="font-medium ml-1">{stats.total}</span>
         </button>
-        <button onClick={() => setFilter("data_received")}
-          className={`px-3 py-1.5 rounded-lg transition ${filter === "data_received" ? "bg-purple-600 text-white" : "bg-purple-50 text-purple-600 hover:bg-purple-100"}`}>
-          Chờ duyệt <span className="font-medium ml-1">{stats.data_received}</span>
-        </button>
         <button onClick={() => setFilter("pending")}
-          className={`px-3 py-1.5 rounded-lg transition ${filter === "pending" ? "bg-amber-600 text-white" : "bg-amber-50 text-amber-600 hover:bg-amber-100"}`}>
-          Chờ chạy <span className="font-medium ml-1">{stats.pending}</span>
+          className={`px-3 py-1.5 rounded-lg transition ${filter === "pending" ? "bg-purple-600 text-white" : "bg-purple-50 text-purple-600 hover:bg-purple-100"}`}>
+          Chờ duyệt <span className="font-medium ml-1">{stats.pending}</span>
         </button>
-        <button onClick={() => setFilter("completed")}
-          className={`px-3 py-1.5 rounded-lg transition ${filter === "completed" ? "bg-green-600 text-white" : "bg-green-50 text-green-600 hover:bg-green-100"}`}>
-          Hoàn tất <span className="font-medium ml-1">{stats.completed}</span>
+        <button onClick={() => setFilter("approved")}
+          className={`px-3 py-1.5 rounded-lg transition ${filter === "approved" ? "bg-green-600 text-white" : "bg-green-50 text-green-600 hover:bg-green-100"}`}>
+          Đã duyệt <span className="font-medium ml-1">{stats.approved}</span>
         </button>
-        <button onClick={() => setFilter("failed")}
-          className={`px-3 py-1.5 rounded-lg transition ${filter === "failed" ? "bg-red-600 text-white" : "bg-red-50 text-red-600 hover:bg-red-100"}`}>
-          Lỗi <span className="font-medium ml-1">{stats.failed}</span>
+        <button onClick={() => setFilter("rejected")}
+          className={`px-3 py-1.5 rounded-lg transition ${filter === "rejected" ? "bg-red-600 text-white" : "bg-red-50 text-red-600 hover:bg-red-100"}`}>
+          Từ chối <span className="font-medium ml-1">{stats.rejected}</span>
         </button>
         <div className="flex-1" />
-        <button onClick={loadSessions} disabled={loading}
+        <button onClick={loadSubmissions} disabled={loading}
           className="px-3 py-1.5 rounded-lg bg-gray-100 text-gray-500 hover:bg-gray-200 transition disabled:opacity-50">
           <RefreshCw size={13} className={`inline mr-1 ${loading ? "animate-spin" : ""}`} />
           Làm mới
@@ -130,86 +111,79 @@ export default function AgentUpdatesPage() {
       {/* Empty */}
       {!loading && filtered.length === 0 && (
         <div className="text-center py-12 text-xs text-gray-400">
-          {filter === "all" ? "Chưa có phiên thu thập nào" : `Không có phiên nào ở trạng thái này`}
+          {filter === "all"
+            ? "Chưa có dữ liệu Agent nào. Tải script Agent từ trang chi tiết khách hàng."
+            : "Không có dữ liệu ở trạng thái này"}
         </div>
       )}
 
-      {/* Sessions list */}
+      {/* Submissions list */}
       {!loading && filtered.length > 0 && (
         <div className="space-y-1.5">
           {filtered.map(s => {
             const cfg = statusCfg[s.status] || statusCfg.pending;
-            const Icon = cfg.icon;
-            const totalDevices = s.deviceCount + s._count.devices;
-            const isReviewable = s.status === "data_received";
 
             return (
-              <div key={s.id}
-                className="flex items-center gap-3 px-4 py-3 rounded-lg border border-gray-200 bg-white hover:border-gray-300 transition">
+              <Link
+                key={s.id}
+                href={s.status === "pending" ? `/agent-updates/${s.id}` : `/customers/${s.customerId}`}
+                className="flex items-center gap-3 px-4 py-3 rounded-lg border border-gray-200 bg-white hover:border-gray-300 transition group"
+              >
                 {/* Icon */}
                 <div className={`w-8 h-8 rounded-lg ${cfg.bg} flex items-center justify-center shrink-0`}>
-                  <Icon size={15} className={cfg.color} />
+                  <Monitor size={15} className={cfg.color} />
                 </div>
 
                 {/* Info */}
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <Link href={`/customers/${s.customerId}`}
-                      className="text-[13px] font-medium text-gray-900 hover:text-blue-600 truncate">
-                      {s.customer?.name || s.customer?.code || "Đã xóa"}
-                    </Link>
+                    <span className="text-[13px] font-medium text-gray-900 truncate">
+                      {s.customerName || "Đã xóa"}
+                    </span>
                     <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium ${cfg.color} ${cfg.bg}`}>
                       {cfg.label}
                     </span>
-                    {totalDevices > 0 && (
+                    {s.deviceCount > 0 && (
                       <span className="text-[10px] text-gray-400">
-                        {totalDevices} thiết bị
+                        {s.deviceCount} thiết bị
                       </span>
                     )}
                   </div>
                   <div className="flex items-center gap-2 mt-0.5 text-[10px] text-gray-400">
                     <span>{new Date(s.createdAt).toLocaleDateString("vi-VN")}</span>
-                    {s.completedAt && (
-                      <>
-                        <span>·</span>
-                        <span>Hoàn tất {new Date(s.completedAt).toLocaleDateString("vi-VN")}</span>
-                      </>
-                    )}
-                    {s.address?.label && (
-                      <>
-                        <span>·</span>
-                        <span>{s.address.label}</span>
-                      </>
-                    )}
                   </div>
-                  {s.status === "failed" && s.errorMessage && (
-                    <div className="flex items-center gap-1 mt-1 text-[10px] text-red-500">
-                      <AlertTriangle size={10} />
-                      {s.errorMessage}
-                    </div>
-                  )}
                 </div>
 
                 {/* Action */}
                 <div className="shrink-0 flex items-center gap-2">
-                  {isReviewable ? (
-                    <Link href={`/customer-devices/review/${s.id}`}
-                      className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-purple-600 text-white text-[11px] font-medium hover:bg-purple-700 transition">
+                  {s.status === "pending" ? (
+                    <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-purple-600 text-white text-[11px] font-medium group-hover:bg-purple-700 transition">
                       <Eye size={12} />
                       Xem & duyệt
-                    </Link>
+                    </span>
                   ) : (
-                    <Link href={`/customers/${s.customerId}`}
-                      className="text-[11px] text-gray-400 hover:text-gray-600 transition">
-                      <ChevronRight size={14} />
-                    </Link>
+                    <ChevronRight size={14} className="text-gray-300 group-hover:text-gray-500 transition" />
                   )}
                 </div>
-              </div>
+              </Link>
             );
           })}
         </div>
       )}
+
+      {/* Instructions */}
+      <div className="mt-8 p-4 rounded-xl border border-gray-200 bg-white">
+        <div className="flex items-center gap-2 mb-2">
+          <Download size={16} className="text-primary" />
+          <h3 className="text-sm font-semibold text-gray-900">Hướng dẫn triển khai Agent</h3>
+        </div>
+        <ol className="space-y-1 text-xs text-gray-500 list-decimal list-inside">
+          <li>Vào trang <Link href="/customers" className="text-blue-600 hover:underline">Khách hàng</Link>, chọn khách hàng cần thu thập</li>
+          <li>Vào tab <strong>Agent</strong>, nhấn <strong>Tải Script</strong></li>
+          <li>Chạy file <code className="bg-gray-100 px-1 rounded text-[10px]">.bat</code> với quyền Administrator trên máy khách</li>
+          <li>Dữ liệu hiện tại <strong>Chờ duyệt</strong> để xem xét và xác nhận</li>
+        </ol>
+      </div>
     </div>
   );
 }

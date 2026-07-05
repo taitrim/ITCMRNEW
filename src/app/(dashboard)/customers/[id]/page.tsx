@@ -4,10 +4,11 @@ import { useSession } from "next-auth/react";
 import { redirect, useRouter, useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Phone, Mail, Globe, MapPin, User, Briefcase, Building2, Plus, Trash2, Edit3, ChevronRight, ExternalLink } from "lucide-react";
+import { ArrowLeft, Phone, Mail, Globe, MapPin, User, Briefcase, Building2, Plus, Trash2, Edit3, ChevronRight, ExternalLink, Download } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { SessionsTab } from "./tabs/collection-sessions-tab";
+import { AgentTab } from "./tabs/agent-tab";
 
 type CustomerDetail = {
   id: string; code: string; name: string; shortName: string | null;
@@ -30,13 +31,15 @@ export default function CustomerDetailPage() {
   useEffect(() => {
     if (status !== "loading" && !session?.user) router.replace("/login");
   }, [status, session]);
-  if (status === "loading") return <div className="flex items-center justify-center min-h-screen"><div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>;
 
   const fetchData = () => {
     fetch(`/api/customers/${id}`).then(r => r.json()).then(d => { setCustomer(d); setLoading(false); });
   };
 
   useEffect(() => { fetchData(); }, [id]);
+
+  // ── early returns (safe: after all hooks) ──
+  if (status === "loading") return <div className="flex items-center justify-center min-h-screen"><div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>;
 
   if (loading) return (
     <div className="min-h-screen bg-surface-secondary/30 pt-4 px-4 space-y-3">
@@ -56,6 +59,7 @@ export default function CustomerDetailPage() {
     { key: "employees", label: `Nhân viên (${customer.employees.length})` },
     { key: "devices", label: "Thiết bị" },
     { key: "sessions", label: "Thu thập" },
+    { key: "agent", label: "Agent" },
     { key: "items", label: `Hạng mục (${customer.items.length})` },
     { key: "addresses", label: `Địa chỉ (${customer.addresses.length})` },
   ];
@@ -87,6 +91,7 @@ export default function CustomerDetailPage() {
         {tab === "employees" && <EmployeesTab customer={customer} />}
         {tab === "devices" && <DevicesTab customerId={id} />}
         {tab === "sessions" && <SessionsTab customerId={id} />}
+        {tab === "agent" && <AgentTab customerId={id} />}
         {tab === "items" && <ItemsTab customer={customer} id={id} onRelink={fetchData} />}
         {tab === "addresses" && <AddressesTab customer={customer} />}
       </div>

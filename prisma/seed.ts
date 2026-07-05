@@ -1,7 +1,9 @@
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
+import crypto from "crypto";
 
 const prisma = new PrismaClient();
+function agentKey() { return "ak_" + crypto.randomBytes(24).toString("hex"); }
 
 async function main() {
   const password = await bcrypt.hash("admin123", 12);
@@ -132,11 +134,11 @@ async function main() {
   const catBusiness = await prisma.customerCategory.create({ data: { name: "Doanh nghiệp", code: "business" } });
 
   // 22. Customers (companies first so they can be responsibleCompany)
-  const biz1 = await prisma.customer.create({ data: { name: "Công ty TNHH ABC Việt Nam", shortName: "ABC", code: "KH-001", categoryId: catBusiness.id, taxCode: "0123456789", phone: "028.3822.1234", email: "info@abc.vn", website: "https://abc.vn", entityId: ent.id } });
-  const biz2 = await prisma.customer.create({ data: { name: "Tập đoàn XYZ", shortName: "XYZ", code: "KH-002", categoryId: catBusiness.id, taxCode: "9876543210", phone: "024.3822.5678", email: "contact@xyz.vn", entityId: ent.id } });
-  const ind1 = await prisma.customer.create({ data: { name: "Nguyễn Văn An", code: "KH-003", categoryId: catIndividual.id, phone: "0909.123.456", email: "an.nguyen@gmail.com", responsibleCompanyId: biz1.id, entityId: ent.id } });
-  const ind2 = await prisma.customer.create({ data: { name: "Trần Thị Bình", code: "KH-004", categoryId: catIndividual.id, phone: "0919.789.012", email: "binh.tran@gmail.com", responsibleCompanyId: biz1.id, entityId: ent.id } });
-  const biz3 = await prisma.customer.create({ data: { name: "Công ty TNHH Dịch vụ CNTT Đông Tiến", shortName: "Đông Tiến", code: "KH-005", categoryId: catBusiness.id, taxCode: "0123456788", phone: "028.3822.9999", website: "https://dongtien.vn", responsibleCompanyId: biz2.id, entityId: ent.id } });
+  const biz1 = await prisma.customer.create({ data: { name: "Công ty TNHH ABC Việt Nam", shortName: "ABC", code: "KH-001", categoryId: catBusiness.id, taxCode: "0123456789", phone: "028.3822.1234", email: "info@abc.vn", website: "https://abc.vn", agentKey: agentKey(), entityId: ent.id } });
+  const biz2 = await prisma.customer.create({ data: { name: "Tập đoàn XYZ", shortName: "XYZ", code: "KH-002", categoryId: catBusiness.id, taxCode: "9876543210", phone: "024.3822.5678", email: "contact@xyz.vn", agentKey: agentKey(), entityId: ent.id } });
+  const ind1 = await prisma.customer.create({ data: { name: "Nguyễn Văn An", code: "KH-003", categoryId: catIndividual.id, phone: "0909.123.456", email: "an.nguyen@gmail.com", agentKey: agentKey(), responsibleCompanyId: biz1.id, entityId: ent.id } });
+  const ind2 = await prisma.customer.create({ data: { name: "Trần Thị Bình", code: "KH-004", categoryId: catIndividual.id, phone: "0919.789.012", email: "binh.tran@gmail.com", agentKey: agentKey(), responsibleCompanyId: biz1.id, entityId: ent.id } });
+  const biz3 = await prisma.customer.create({ data: { name: "Công ty TNHH Dịch vụ CNTT Đông Tiến", shortName: "Đông Tiến", code: "KH-005", categoryId: catBusiness.id, taxCode: "0123456788", phone: "028.3822.9999", website: "https://dongtien.vn", agentKey: agentKey(), responsibleCompanyId: biz2.id, entityId: ent.id } });
 
   // 23. Customer Addresses
   await prisma.customerAddress.create({ data: { customerId: biz1.id, address: "123 Nguyễn Huệ", city: "TP.HCM", state: "Việt Nam", type: "office", isDefault: true } });

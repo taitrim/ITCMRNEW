@@ -56,6 +56,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
       email: body.email || null,
       logo: body.logo || null,
       note: body.note || null,
+      agentEnabled: body.agentEnabled ?? undefined,
       isCodeAuto: body.isCodeAuto !== false,
     },
     include: { category: true, addresses: true, contacts: true, employees: true, items: true },

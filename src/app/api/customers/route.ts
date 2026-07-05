@@ -1,5 +1,6 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import crypto from "crypto";
 
 export async function GET(req: Request) {
   const session = await auth();
@@ -76,6 +77,7 @@ export async function POST(req: Request) {
       email: body.email || null,
       logo: body.logo || null,
       note: body.note || null,
+      agentKey: "ak_" + crypto.randomBytes(24).toString("hex"),
       isCodeAuto: !body.code, // manual input = not auto
     },
   });
