@@ -184,79 +184,91 @@ echo Found: !AGENT_EXE! >> "%LOG_FILE%"
 :: === Buoc 2: Chay GLPI Agent ===
 :run_agent
 echo.
-echo Step 2/3: Collecting inventory (takes ~1 min)...
-echo [2/3] Running GLPI Agent... >> "%LOG_FILE%"
-
+echo ============================================
+echo   [2/3] THU THAP THIET BI
+echo ============================================
 set "BASE_DIR=%~dp0"
 set "OUTPUT_DIR=%BASE_DIR%%TEMP_DIR%\\output"
 if not exist "%OUTPUT_DIR%" mkdir "%OUTPUT_DIR%" >nul 2>&1
 
 cd /d "%BASE_DIR%"
-echo Running: !AGENT_EXE! --local "%OUTPUT_DIR%" --json --full
+echo Dang chay GLPI Agent (khoang vai giay)...
 echo CMD: !AGENT_EXE! --local "%OUTPUT_DIR%" --json --full >> "%LOG_FILE%"
 "!AGENT_EXE!" --local "%OUTPUT_DIR%" --json --full --logfile agent-log.txt 2>>"%LOG_FILE%"
 set "EXIT_CODE=%ERRORLEVEL%"
-echo Agent exit code: %EXIT_CODE%
-echo Agent exit code: %EXIT_CODE% >> "%LOG_FILE%"
 
-ping -n 4 127.0.0.1 >nul 2>&1
+if %EXIT_CODE% neq 0 (
+    echo.
+    echo [LOI] GLPI Agent thoat voi ma %EXIT_CODE%
+    echo [LOI] Agent exit code %EXIT_CODE% >> "%LOG_FILE%"
+    if exist agent-log.txt (
+        echo Chi tiet:
+        type agent-log.txt
+        type agent-log.txt >> "%LOG_FILE%"
+    )
+    echo.
+    goto :end
+)
+echo GLPI Agent chay thanh cong!
+echo Agent OK >> "%LOG_FILE%"
+
+:: Tim file ket qua
+ping -n 3 127.0.0.1 >nul 2>&1
 
 set "JSON_FILE="
 for /f "delims=" %%f in ('dir /b "%OUTPUT_DIR%" 2^>nul') do (
     if not defined JSON_FILE set "JSON_FILE=%OUTPUT_DIR%\\%%f"
 )
-
-echo Files found in output dir: >> "%LOG_FILE%"
 dir /b "%OUTPUT_DIR%" >> "%LOG_FILE%" 2>&1
 
 if not defined JSON_FILE (
     echo.
-    echo [ERROR] No output file found from GLPI Agent.
-    echo [ERROR] No output file >> "%LOG_FILE%"
+    echo [LOI] Khong tim thay file ket qua tu GLPI Agent.
+    echo No output file >> "%LOG_FILE%"
     if exist agent-log.txt (
-        echo.
         echo Agent log:
         type agent-log.txt
-        echo --- agent-log.txt --- >> "%LOG_FILE%"
         type agent-log.txt >> "%LOG_FILE%"
     )
-    echo.
-    echo Output directory contents:
+    echo Cac file trong output:
     dir /s "%OUTPUT_DIR%" 2>nul
     dir /s "%OUTPUT_DIR%" >> "%LOG_FILE%" 2>&1
     echo.
     goto :end
 )
 
-echo Collected: !JSON_FILE!
-echo Collected: !JSON_FILE! >> "%LOG_FILE%"
+echo File ket qua: !JSON_FILE!
+echo File: !JSON_FILE! >> "%LOG_FILE%"
 echo.
-echo Step 3/3: Sending to CRM...
-echo [3/3] Sending to CRM >> "%LOG_FILE%"
 
-powershell -Command "$c = Get-Content -Raw '!JSON_FILE!' -ErrorAction Stop; $p = $c | ConvertFrom-Json; $h = $p.hardware; $sn = if ($p.bios.sserial) { $p.bios.sserial } else { $h.uuid }; $body = @{ action='inventory'; deviceid=('' + $h.name + '-' + $sn); content=$p } | ConvertTo-Json -Depth 15 -Compress; try { Invoke-WebRequest -Uri '%CRM_URL%' -Method POST -ContentType 'application/json' -Body $body -UseBasicParsing | ForEach-Object { $_.StatusCode; Write-Output 'CRM OK' } } catch { Write-Output 'FAIL:' $_.Exception.Message }" 2>>"%LOG_FILE%"
-echo.
-echo Done!
-echo Done! >> "%LOG_FILE%"
-del "!JSON_FILE!" >nul 2>&1
-if exist agent-log.txt del agent-log.txt >nul 2>&1
+:: === Buoc 3: Gui len CRM ===
+echo ============================================
+echo   [3/3] GUI DU LIEU LEN CRM
+echo ============================================
+echo Dang doc file va gui...
+echo [3/3] Sending... >> "%LOG_FILE%"
+
+powershell -Command "$c = Get-Content -Raw '!JSON_FILE!' -ErrorAction Stop; $p = $c | ConvertFrom-Json; $h = $p.hardware; $sn = if ($p.bios.sserial) { $p.bios.sserial } else { $h.uuid }; $deviceid = $h.name + '-' + $sn; Write-Output 'Thiet bi: ' $deviceid; $body = @{ action='inventory'; deviceid=$deviceid; content=$p } | ConvertTo-Json -Depth 15 -Compress; try { $r = Invoke-WebRequest -Uri '%CRM_URL%' -Method POST -ContentType 'application/json' -Body $body -UseBasicParsing -TimeoutSec 30; Write-Output 'CRM: ' $r.StatusCode; Write-Output 'GUI THANH CONG!' } catch { Write-Output 'LOI GUI: ' $_.Exception.Message }" 2>>"%LOG_FILE%"
+
 echo.
 echo ============================================
-echo Completed: %DATE% %TIME%
-echo Log saved to: %CD%\%LOG_FILE%
+echo   HOAN TAT
+echo   Log: %CD%\%LOG_FILE%
 echo ============================================
 echo.
-pause
+echo Nhan phim bat ky de thoat...
+pause >nul
 goto :eof
 
 :end
 echo.
 echo ============================================
-echo FAILED: %DATE% %TIME%
-echo Check log: %CD%\%LOG_FILE%
+echo   THAT BAI - %DATE% %TIME%
+echo   Log: %CD%\%LOG_FILE%
 echo ============================================
 echo.
-pause`;
+echo Nhan phim bat ky de thoat...
+pause >nul`;
 }
 
 /** Linux .sh */
