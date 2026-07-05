@@ -413,7 +413,8 @@ export async function GET(
   const ext = osParam === "windows" ? "bat" : "sh";
   const filename = `agent_${customerId}.${ext}`;
 
-  // batchSafe: ^& d? batch kh?ng c?t URL ? & khi set CRM_URL
+  // ^& cho echo (simple .ps1), real & cho powershell -Command "..." (GLPI bat)
+  // vì batch coi & la literal ben trong double quote
   const batchSafeUrl = agentUrl.replace(/&/g, "^&");
 
   if (mode === "simple") {
@@ -425,7 +426,8 @@ export async function GET(
     const pkgUrl = `https://github.com/glpi-project/glpi-agent/releases/download/${VERSION}/GLPI-Agent-${VERSION}_x86_64.pkg`;
     script = createMacScript(agentUrl, pkgUrl);
   } else {
-    script = createGlpiBat(batchSafeUrl, winZipUrl);
+    // GLPI bat: URL dung trong powershell -Command "...", & la literal trong double quote
+    script = createGlpiBat(agentUrl, winZipUrl);
   }
 
   return new Response(script, {
