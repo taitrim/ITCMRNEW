@@ -265,8 +265,10 @@ echo ============================================ >> "%LOG_FILE%"
 echo Dang doc file va gui...
 echo [3/3] Reading file !JSON_FILE! >> "%LOG_FILE%"
 
-:: Trich xuat deviceid tu GLPI JSON, wrap dung format, POST len CRM
-powershell -Command "$c = Get-Content -Raw '!JSON_FILE!' -ErrorAction Stop; $p = $c | ConvertFrom-Json; $h = $p.hardware; $sn = if ($p.bios.sserial) { $p.bios.sserial } else { $h.uuid }; $deviceid = $h.name + '-' + $sn; Write-Output 'Thiet bi: ' $deviceid; $body = @{ action='inventory'; deviceid=$deviceid; content=$p } | ConvertTo-Json -Depth 15 -Compress; Write-Output 'Dang gui...'; try { $r = Invoke-WebRequest -Uri '%CRM_URL%' -Method POST -ContentType 'application/json' -Body $body -UseBasicParsing -TimeoutSec 30; $result = $r.Content | ConvertFrom-Json; if ($r.StatusCode -eq 200 -or $r.StatusCode -eq 201) { Write-Output 'CRM: ' $r.StatusCode; Write-Output 'GUI THANH CONG!' } else { Write-Output 'CRM: ' $r.StatusCode ' - ' $result } } catch { Write-Output 'LOI GUI: ' $_.Exception.Message }" 2>>"%LOG_FILE%"
+:: GLPI Agent output co wrapper: { action, deviceid, content: { hardware, bios, ... }, itemtype }
+:: Lay $p.content la data that, $p.deviceid la deviceid tu Agent
+:: Khong wrap lai action/deviceid nua -> POST { action='inventory', deviceid, content }
+powershell -Command "$c = Get-Content -Raw '!JSON_FILE!' -ErrorAction Stop; $p = $c | ConvertFrom-Json; $inv = if ($p.content) { $p.content } else { $p }; $did = if ($p.deviceid) { $p.deviceid } else { ($p.hardware.name)+'-'+($p.bios.sserial) }; Write-Output 'Thiet bi: ' $did; $body = @{ action='inventory'; deviceid=$did; content=$inv } | ConvertTo-Json -Depth 15 -Compress; Write-Output 'Dang gui...'; try { $r = Invoke-WebRequest -Uri '%CRM_URL%' -Method POST -ContentType 'application/json' -Body $body -UseBasicParsing -TimeoutSec 30; if ($r.StatusCode -eq 200 -or $r.StatusCode -eq 201) { Write-Output 'CRM: ' $r.StatusCode; Write-Output 'GUI THANH CONG!' } else { Write-Output 'CRM: ' $r.StatusCode } } catch { Write-Output 'LOI GUI: ' $_.Exception.Message }" 2>>"%LOG_FILE%"
 
 echo POST done >> "%LOG_FILE%"
 echo.
