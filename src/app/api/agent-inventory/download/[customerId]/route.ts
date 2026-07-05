@@ -5,16 +5,15 @@ import { auth } from "@/lib/auth";
 const VERSION = "1.18";
 
 /** Simple Windows: PowerShell thuần, không cần tải GLPI Agent */
+// agentUrl da duoc escape & -> ^& (batch-safe) truoc khi goi ham nay
 function createSimpleScript(agentUrl: string): string {
-  // ^& để batch echo ra file .ps1 có & thật
-  const batchSafeUrl = agentUrl.replace(/&/g, "^&");
   const lines: string[] = [
     `@echo off`,
     `chcp 65001 >nul`,
     `title CRM Agent - Quick Inventory`,
     `cd /d "%~dp0"`,
     ``,
-    `set "CRM_URL=${batchSafeUrl}"`,
+    `set "CRM_URL=${agentUrl}"`,
     `set "PS_SCRIPT=%temp%\\crm-agent.ps1"`,
     ``,
     `echo ============================================`,
@@ -414,8 +413,11 @@ export async function GET(
   const ext = osParam === "windows" ? "bat" : "sh";
   const filename = `agent_${customerId}.${ext}`;
 
+  // batchSafe: ^& d? batch kh?ng c?t URL ? & khi set CRM_URL
+  const batchSafeUrl = agentUrl.replace(/&/g, "^&");
+
   if (mode === "simple") {
-    script = createSimpleScript(agentUrl);
+    script = createSimpleScript(batchSafeUrl);
   } else if (osParam === "linux") {
     const appImageUrl = `https://github.com/glpi-project/glpi-agent/releases/download/${VERSION}/glpi-agent-${VERSION}-x86_64.AppImage`;
     script = createLinuxScript(agentUrl, appImageUrl);
@@ -423,7 +425,7 @@ export async function GET(
     const pkgUrl = `https://github.com/glpi-project/glpi-agent/releases/download/${VERSION}/GLPI-Agent-${VERSION}_x86_64.pkg`;
     script = createMacScript(agentUrl, pkgUrl);
   } else {
-    script = createGlpiBat(agentUrl, winZipUrl);
+    script = createGlpiBat(batchSafeUrl, winZipUrl);
   }
 
   return new Response(script, {
