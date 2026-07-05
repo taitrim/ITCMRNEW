@@ -253,3 +253,30 @@ Every Friday:
 - `tsc --noEmit` — 0 errors
 - `npm run build` — compiled successfully
 - `npm test` — 1 test passed
+
+### ✅ ITSM-P02 — Agent inventory E2E + bugfixes
+
+**Status:** done
+**Started:** 2026-07-05
+**Completed:** 2026-07-05
+**Commits:** `61a3b73`
+
+**Plan for this phase:**
+- [x] Fix React hook order violation in customer detail page (early return before all hooks)
+- [x] Fix `biosUuid` field on `CustomerCollectedDevice` select (field doesn't exist)
+- [x] Write E2E tests for full agent flow (submit → approve, submit → reject)
+- [x] Write E2E test for customer Agent tab, agent-updates list page
+- [x] `page.request`-based auth (login per test, shared browser cookies)
+
+**Delivered:**
+- 3 E2E tests passing (approve, reject, UI pages)
+- Fixed customer detail page crash (React Rules of Hooks)
+- Fixed submission detail API (removed invalid `biosUuid` select)
+- Clean test structure with per-test login via `page.request`
+
+**Verified:**
+- `tsc --noEmit` — 0 errors
+- `npm run build` — compiled (60+ routes)
+- `npm test` — 1 vitest pass
+- `npx playwright test` — 4/4 pass (submit→approve, submit→reject, Agent tab UI, setup)
+- `node scripts/check-file-sizes.mjs` — no breaches

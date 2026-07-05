@@ -7,7 +7,6 @@ import Link from "next/link";
 import { ArrowLeft, Phone, Mail, Globe, MapPin, User, Briefcase, Building2, Plus, Trash2, Edit3, ChevronRight, ExternalLink, Download } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { SessionsTab } from "./tabs/collection-sessions-tab";
 import { AgentTab } from "./tabs/agent-tab";
 
 type CustomerDetail = {
@@ -58,7 +57,6 @@ export default function CustomerDetailPage() {
     { key: "contacts", label: `Liên hệ (${customer.contacts.length})` },
     { key: "employees", label: `Nhân viên (${customer.employees.length})` },
     { key: "devices", label: "Thiết bị" },
-    { key: "sessions", label: "Thu thập" },
     { key: "agent", label: "Agent" },
     { key: "items", label: `Hạng mục (${customer.items.length})` },
     { key: "addresses", label: `Địa chỉ (${customer.addresses.length})` },
@@ -90,7 +88,6 @@ export default function CustomerDetailPage() {
         {tab === "contacts" && <ContactsTab customer={customer} />}
         {tab === "employees" && <EmployeesTab customer={customer} />}
         {tab === "devices" && <DevicesTab customerId={id} />}
-        {tab === "sessions" && <SessionsTab customerId={id} />}
         {tab === "agent" && <AgentTab customerId={id} />}
         {tab === "items" && <ItemsTab customer={customer} id={id} onRelink={fetchData} />}
         {tab === "addresses" && <AddressesTab customer={customer} />}

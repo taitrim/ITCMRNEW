@@ -7,7 +7,7 @@ import Link from "next/link";
 import { Search, Plus, Building2, User, Briefcase, MapPin, ChevronRight, Phone, Mail, SlidersHorizontal, X, Save, Trash2, Edit3, ExternalLink, Globe, Upload, Building, Users, Tag, CreditCard, Calendar, FileText, Shield, FolderKanban, Wallet, Monitor, Ticket, Wrench, AlertTriangle, Printer, KeyRound, Package, LayoutGrid, List as ListIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { SessionsTab } from "./[id]/tabs/collection-sessions-tab";
+
 
 const ITEM_LABELS: Record<string, string> = {
   Computers: "Máy tính", Monitors: "Màn hình", Printers: "Máy in",
@@ -601,7 +601,6 @@ function DetailCustomer({ id, onClose, onEdit }: { id: string; onClose: () => vo
     { key: "contacts", label: `Liên hệ` },
     { key: "employees", label: `Nhân viên` },
     { key: "devices", label: `Thiết bị` },
-    { key: "sessions", label: `Thu thập` },
     { key: "items", label: `Hạng mục` },
     { key: "addresses", label: `Địa chỉ` },
   ];
@@ -637,7 +636,6 @@ function DetailCustomer({ id, onClose, onEdit }: { id: string; onClose: () => vo
           {tab === "contacts" && <ContactsContent customer={customer} />}
           {tab === "employees" && <EmployeesContent customer={customer} />}
           {tab === "devices" && <DevicesContent customerId={id} />}
-          {tab === "sessions" && <SessionsContent customerId={id} />}
           {tab === "items" && <ItemsContent customer={customer} id={id} />}
           {tab === "addresses" && <AddressesContent customer={customer} />}
         </div>
@@ -909,11 +907,6 @@ function DevicesContent({ customerId }: { customerId: string }) {
       ))}
     </div>
   );
-}
-
-/* ===== SESSIONS CONTENT (modal) ===== */
-function SessionsContent({ customerId }: { customerId: string }) {
-  return <SessionsTab customerId={customerId} />;
 }
 
 /* ===== EDIT MODAL ===== */
