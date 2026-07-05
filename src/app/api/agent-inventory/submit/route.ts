@@ -8,6 +8,7 @@ import { createReviewData } from "@/lib/inventory-matching";
  *   { action: "inventory", deviceid: "PC-12345", content: { hardware: {...}, bios: {...}, ... } }
  */
 type DeviceRecord = {
+  deviceId: string;
   deviceType: string;
   name: string;
   manufacturer: string;
@@ -84,6 +85,7 @@ function parsePowerShellPayload(body: Record<string, unknown>): DeviceRecord[] {
   const deviceType = (hw.chassis_type || "").toLowerCase() === "laptop" ? "laptop" : "computer";
 
   return [{
+    deviceId: String(body.deviceid || `${hw.name || ""}_${serialNumber || ""}_${Date.now()}`),
     deviceType,
     name: hw.name || modelName || "Unknown PC",
     manufacturer,
@@ -95,7 +97,7 @@ function parsePowerShellPayload(body: Record<string, unknown>): DeviceRecord[] {
     ram: ramStr,
     disk: diskStr,
     os: os.full_name || os.name || "",
-    notes: `PowerShell Agent — deviceid: ${body.deviceid || ""} | user: ${loggedUser}`,
+    notes: `PowerShell Agent — user: ${loggedUser}`,
     componentsJson,
   }];
 }
