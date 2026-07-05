@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 type Session = {
   id: string;
   token: string;
-  status: "pending" | "active" | "completed" | "failed";
+  status: "pending" | "active" | "data_received" | "completed" | "failed";
   deviceCount: number;
   collectedById: string | null;
   expiresAt: string | null;
@@ -17,6 +17,7 @@ type Session = {
   errorMessage: string | null;
   createdAt: string;
   address: { id: string; label: string | null; address: string | null } | null;
+  reviewData: string | null;
   _count: { devices: number };
 };
 
@@ -89,6 +90,7 @@ function CreateSessionForm({ customerId, addresses, onDone, onCancel }: {
   const [addressId, setAddressId] = useState("");
   const [creating, setCreating] = useState(false);
   const [result, setResult] = useState<Session | null>(null);
+  const [selectedOs, setSelectedOs] = useState("auto");
 
   const create = async () => {
     setCreating(true);
@@ -107,7 +109,14 @@ function CreateSessionForm({ customerId, addresses, onDone, onCancel }: {
   if (result) {
     const serverUrl = typeof window !== "undefined" ? window.location.origin : "";
     const agentCmd = `glpi-agent --server ${serverUrl}/api/agent-inventory/${result.token} --json`;
-    const scriptUrl = `${serverUrl}/api/agent-inventory/${result.token}/script`;
+    const scriptUrl = `${serverUrl}/api/agent-inventory/${result.token}/script${selectedOs !== "auto" ? `?os=${selectedOs}` : ""}`;
+
+    const osOptions: Record<string, { label: string; file: string }> = {
+      auto: { label: "Tự động (theo trình duyệt)", file: "" },
+      windows: { label: "Windows", file: "thu-thap.bat" },
+      linux: { label: "Linux", file: "thu-thap-linux.sh" },
+      macos: { label: "macOS", file: "thu-thap-macos.sh" },
+    };
 
     return (
       <div className="bg-white rounded-xl border border-border/50 mb-3 overflow-hidden">
@@ -122,19 +131,30 @@ function CreateSessionForm({ customerId, addresses, onDone, onCancel }: {
           <div className="bg-amber-50 rounded-lg p-3">
             <p className="text-[10px] text-amber-800 font-medium mb-1.5">Cách thực hiện</p>
             <ol className="text-[11px] text-amber-700 space-y-1 list-decimal list-inside">
-              <li>Bấm nút bên dưới để tải script</li>
+              <li>Chọn hệ điều hành của máy khách bên dưới → bấm tải script</li>
               <li>Copy file script vào máy khách (USB / email / mạng nội bộ)</li>
-              <li>Chạy file <strong>thu-thap.bat</strong> (Windows) hoặc <strong>thu-thap.sh</strong> (Linux/macOS)</li>
+              <li>Chạy file <strong>{osOptions[selectedOs]?.file || "script"}</strong> trên máy khách</li>
             </ol>
             <p className="text-[10px] text-amber-600 mt-1.5">
               Token hết hạn sau 24h. Mỗi token chỉ dùng được <strong>1 lần</strong>.
             </p>
           </div>
 
+          <div>
+            <label className="text-[10px] text-gray-500">Hệ điều hành máy khách</label>
+            <select value={selectedOs} onChange={e => setSelectedOs(e.target.value)}
+              className="w-full h-8 px-2 rounded-lg border border-gray-200 text-xs focus:outline-hidden focus:border-blue-400 mt-1">
+              <option value="auto">Tự động (theo trình duyệt của bạn)</option>
+              <option value="windows">Windows → thu-thap.bat</option>
+              <option value="linux">Linux → thu-thap-linux.sh</option>
+              <option value="macos">macOS → thu-thap-macos.sh</option>
+            </select>
+          </div>
+
           <a href={scriptUrl} download
             className="flex items-center justify-center gap-2 w-full h-10 rounded-xl bg-primary text-white text-sm font-medium hover:bg-primary-600 transition">
             <Download size={16} />
-            Tải script thu thập
+            Tải {osOptions[selectedOs]?.file || "script"}
           </a>
 
           <details className="text-center">
@@ -207,10 +227,12 @@ function CreateSessionForm({ customerId, addresses, onDone, onCancel }: {
 /* ===== Session Card ===== */
 function SessionCard({ session, onRefresh }: { session: Session; onRefresh: () => void }) {
   const [copied, setCopied] = useState(false);
+  const [selectedOs, setSelectedOs] = useState("auto");
 
   const statusConfig: Record<string, { label: string; color: string; bg: string }> = {
     pending: { label: "Chờ chạy", color: "text-amber-700", bg: "bg-amber-100" },
     active: { label: "Đang thu thập", color: "text-blue-700", bg: "bg-blue-100" },
+    data_received: { label: "Chờ duyệt", color: "text-purple-700", bg: "bg-purple-100" },
     completed: { label: "Hoàn tất", color: "text-green-700", bg: "bg-green-100" },
     failed: { label: "Lỗi", color: "text-red-700", bg: "bg-red-100" },
   };
@@ -261,17 +283,41 @@ function SessionCard({ session, onRefresh }: { session: Session; onRefresh: () =
             </div>
 
             {session.token && session.status === "pending" && (
-              <div className="mt-2 flex gap-1.5">
-                <a href={`${serverUrl}/api/agent-inventory/${session.token}/script`} download
-                  className="flex items-center gap-1 h-7 px-3 rounded-lg bg-primary text-white text-[10px] font-medium hover:bg-primary-600 transition">
-                  <Download size={11} />
-                  Tải script
+              <div className="mt-2 space-y-1.5">
+                <div className="flex gap-1.5">
+                  <select value={selectedOs} onChange={e => setSelectedOs(e.target.value)}
+                    className="h-7 px-2 rounded-lg border border-gray-200 text-[10px] focus:outline-hidden focus:border-blue-400 flex-1 min-w-0">
+                    <option value="auto">Tự động</option>
+                    <option value="windows">Windows</option>
+                    <option value="linux">Linux</option>
+                    <option value="macos">macOS</option>
+                  </select>
+                  <a href={`${serverUrl}/api/agent-inventory/${session.token}/script${selectedOs !== "auto" ? `?os=${selectedOs}` : ""}`} download
+                    className="flex items-center gap-1 h-7 px-3 rounded-lg bg-primary text-white text-[10px] font-medium hover:bg-primary-600 transition shrink-0">
+                    <Download size={11} />
+                    Tải
+                  </a>
+                  <a href={`${serverUrl}/api/agent-inventory/${session.token}/script${selectedOs !== "auto" ? `?os=${selectedOs}&mode=simple` : "?mode=simple"}`} download
+                    className="flex items-center gap-1 h-7 px-3 rounded-lg bg-emerald-600 text-white text-[10px] font-medium hover:bg-emerald-700 transition shrink-0">
+                    <Download size={11} />
+                    Nhanh
+                  </a>
+                  <button onClick={copyCmd}
+                    className="h-7 px-3 rounded-lg bg-gray-100 text-gray-500 text-[10px] hover:bg-gray-200 transition shrink-0">
+                    <Copy size={11} className="inline mr-1" />
+                    Lệnh
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {session.status === "data_received" && (
+              <div className="mt-2">
+                <a href={`/customer-devices/review/${session.id}`}
+                  className="inline-flex items-center gap-1 h-7 px-3 rounded-lg bg-purple-600 text-white text-[10px] font-medium hover:bg-purple-700 transition">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                  Xem &amp; duyệt
                 </a>
-                <button onClick={copyCmd}
-                  className="h-7 px-3 rounded-lg bg-gray-100 text-gray-500 text-[10px] hover:bg-gray-200 transition">
-                  <Copy size={11} className="inline mr-1" />
-                  Sao chép lệnh
-                </button>
               </div>
             )}
 

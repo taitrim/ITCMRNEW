@@ -2,10 +2,23 @@ import { prisma } from "@/lib/db";
 
 /* ===== GLPI Agent Inventory Script =====
  *
- * Script .bat sẽ:
+ * Trả về script thu thập thiết bị dựa trên user-agent (hoặc query param ?os=).
+ * Hỗ trợ 3 hệ điều hành: Windows (.bat), Linux (.sh), macOS (.sh).
+ *
+ * Mỗi script sẽ:
  *   1. Tải GLPI Agent portable (có cache — không tải lại nếu đã có)
- *   2. Chạy GLPI Agent với --local output_dir --json (inventory → file JSON)
+ *   2. Chạy GLPI Agent với --local output_dir --json --full (inventory → file JSON)
  *   3. curl POST file JSON lên CRM API
+ *   Fallback: Nếu không tải được GLPI Agent, thu thập thông tin cơ bản thủ công
+ *
+ * Cache persistent tại:
+ *   - Windows: glpi-agent-temp\ (cùng thư mục script)
+ *   - Linux/macOS: ~/.cache/crm-agent/agent/
+ *   - Output cũ >30 ngày tự động xoá
+ *
+ * OS detection:
+ *   - Mặc định: User-agent của trình duyệt
+ *   - Ghi đè: ?os=windows|linux|macos (khi cần tải cho máy khác)
  *
  * Ưu điểm GLPI Agent:
  *   - Phát hiện chính xác PC/Laptop/AIO (chassis type)
@@ -14,6 +27,90 @@ import { prisma } from "@/lib/db";
  *   - Network, GPU, software, BIOS, monitors chi tiết
  *   - Định dạng chuẩn FusionInventory
  */
+
+/**
+ * Simple Windows script: dùng PowerShell thuần, KHÔNG cần tải GLPI Agent.
+ * Chạy nhanh, không lỗi encoding, không cần internet.
+ */
+function createSimpleWindowsScript(agentUrl: string): string {
+  // Dùng >> cho từng dòng (không dùng () block) để tránh lỗi CMD với ) và $
+  const lines: string[] = [
+    `@echo off`,
+    `chcp 65001 >nul`,
+    `title CRM Inventory`,
+    `cd /d "%~dp0"`,
+    ``,
+    `set "CRM_URL=${agentUrl}"`,
+    `set "PS_SCRIPT=%temp%\\crm-inv.ps1"`,
+    ``,
+    `echo ============================================`,
+    `echo   CRM Agent - Quick Inventory`,
+    `echo ============================================`,
+    `echo.`,
+    `echo Step 1/3: Collecting system info...`,
+    ``,
+    `:: Generate PowerShell script line by line (avoid () block issues)`,
+    ``,
+    `echo # CRM Inventory Collector > "%PS_SCRIPT%"`,
+    `echo $ErrorActionPreference = 'Stop' >> "%PS_SCRIPT%"`,
+    `echo try { >> "%PS_SCRIPT%"`,
+    `echo   $hostname = $env:COMPUTERNAME >> "%PS_SCRIPT%"`,
+    `echo   $cpu = (Get-CimInstance Win32_Processor -ErrorAction SilentlyContinue ^| Select-Object -First 1).Name >> "%PS_SCRIPT%"`,
+    `echo   $ram = [math]::Round((Get-CimInstance Win32_ComputerSystem -ErrorAction SilentlyContinue).TotalPhysicalMemory / 1MB, 0^) >> "%PS_SCRIPT%"`,
+    `echo   $serial = (Get-CimInstance Win32_BIOS -ErrorAction SilentlyContinue).SerialNumber >> "%PS_SCRIPT%"`,
+    `echo   $manufacturer = (Get-CimInstance Win32_ComputerSystem -ErrorAction SilentlyContinue).Manufacturer >> "%PS_SCRIPT%"`,
+    `echo   $model = (Get-CimInstance Win32_ComputerSystem -ErrorAction SilentlyContinue).Model >> "%PS_SCRIPT%"`,
+    `echo   $ip = (Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue ^| Where-Object { $_.InterfaceAlias -ne 'Loopback Pseudo-Interface 1' } ^| Select-Object -First 1^).IPAddress >> "%PS_SCRIPT%"`,
+    `echo   $mac = (Get-NetAdapter -ErrorAction SilentlyContinue ^| Where-Object { $_.Status -eq 'Up' } ^| Select-Object -First 1^).MacAddress >> "%PS_SCRIPT%"`,
+    `echo   $os = (Get-CimInstance Win32_OperatingSystem -ErrorAction SilentlyContinue).Caption >> "%PS_SCRIPT%"`,
+    `echo   $user = $env:USERNAME >> "%PS_SCRIPT%"`,
+    `echo   $diskGB = [math]::Round(((Get-CimInstance Win32_LogicalDisk -Filter 'DriveType=3' -ErrorAction SilentlyContinue ^| Measure-Object -Property Size -Sum^).Sum / 1GB^), 0^) >> "%PS_SCRIPT%"`,
+    `echo   $chassis = 'Desktop' >> "%PS_SCRIPT%"`,
+    `echo   $enc = Get-CimInstance Win32_SystemEnclosure -ErrorAction SilentlyContinue ^| Select-Object -First 1 >> "%PS_SCRIPT%"`,
+    `echo   if ($enc -and $enc.ChassisTypes -contains 10 -or $enc.ChassisTypes -contains 11 -or $enc.ChassisTypes -contains 12 -or $enc.ChassisTypes -contains 14^) { $chassis = 'Laptop' } >> "%PS_SCRIPT%"`,
+    `echo   $body = @{ >> "%PS_SCRIPT%"`,
+    `echo     action = 'inventory' >> "%PS_SCRIPT%"`,
+    `echo     deviceid = "$hostname-$serial" >> "%PS_SCRIPT%"`,
+    `echo     content = @{ >> "%PS_SCRIPT%"`,
+    `echo       hardware = @{ name = $hostname; chassis_type = $chassis; memory = $ram; uuid = $serial; lastloggeduser = $user } >> "%PS_SCRIPT%"`,
+    `echo       bios = @{ smanufacturer = $manufacturer; smodel = $model; sserial = $serial } >> "%PS_SCRIPT%"`,
+    `echo       operatingsystem = @{ name = 'Windows'; full_name = $os } >> "%PS_SCRIPT%"`,
+    `echo       cpus = @(@{ name = $cpu }) >> "%PS_SCRIPT%"`,
+    `echo       storages = @(@{ disksize = ($diskGB * 1024^) }) >> "%PS_SCRIPT%"`,
+    `echo       networks = @(@{ ipaddress = $ip; macaddr = $mac }) >> "%PS_SCRIPT%"`,
+    `echo       users = @(@{ LOGIN = $user }) >> "%PS_SCRIPT%"`,
+    `echo     } >> "%PS_SCRIPT%"`,
+    `echo   } >> "%PS_SCRIPT%"`,
+    `echo   $json = $body ^| ConvertTo-Json -Depth 10 -Compress >> "%PS_SCRIPT%"`,
+    `echo   Write-Output "Hostname: $hostname" >> "%PS_SCRIPT%"`,
+    `echo   Write-Output "CPU: $cpu" >> "%PS_SCRIPT%"`,
+    `echo   Write-Output "RAM: $ram MB" >> "%PS_SCRIPT%"`,
+    `echo   Write-Output "Disk: $diskGB GB" >> "%PS_SCRIPT%"`,
+    `echo   Write-Output "Serial: $serial" >> "%PS_SCRIPT%"`,
+    `echo   Write-Output "Manufacturer: $manufacturer" >> "%PS_SCRIPT%"`,
+    `echo   Write-Output "Model: $model" >> "%PS_SCRIPT%"`,
+    `echo   Write-Output "IP: $ip" >> "%PS_SCRIPT%"`,
+    `echo   Write-Output "MAC: $mac" >> "%PS_SCRIPT%"`,
+    `echo   Write-Output "" >> "%PS_SCRIPT%"`,
+    `echo   Write-Output "Sending to CRM..." >> "%PS_SCRIPT%"`,
+    `echo   $jsonBody = $body ^| ConvertTo-Json -Depth 10 -Compress >> "%PS_SCRIPT%"`,
+    `echo   Invoke-RestMethod -Uri '%CRM_URL%' -Method POST -Body $jsonBody -ContentType 'application/json' -TimeoutSec 30 ^| Out-Null >> "%PS_SCRIPT%"`,
+    `echo   Write-Output "Done!" >> "%PS_SCRIPT%"`,
+    `echo } catch { >> "%PS_SCRIPT%"`,
+    `echo   Write-Output "ERROR: $_" >> "%PS_SCRIPT%"`,
+    `echo   exit 1 >> "%PS_SCRIPT%"`,
+    `echo } >> "%PS_SCRIPT%"`,
+    ``,
+    `:: Run the PowerShell script`,
+    `powershell -NoProfile -ExecutionPolicy Bypass -File "%PS_SCRIPT%"`,
+    ``,
+    `:: Clean up`,
+    `del "%PS_SCRIPT%" >nul 2>&1`,
+    `echo.`,
+    `pause`,
+  ];
+  return lines.join("\r\n");
+}
 
 export async function GET(req: Request, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
@@ -31,7 +128,16 @@ export async function GET(req: Request, { params }: { params: Promise<{ token: s
     return new Response("Session not available", { status: 410 });
   }
 
-  const baseUrl = new URL(req.url).origin;
+  // Ưu tiên: query param ?server= → Host header → req.url origin
+  const reqUrl = new URL(req.url);
+  const serverOverride = reqUrl.searchParams.get("server") || "";
+  const hostHeader = req.headers.get("host") || "";
+  const protocol = req.headers.get("x-forwarded-proto") || reqUrl.protocol.replace(":", "");
+  const baseUrl = serverOverride
+    ? `${protocol}://${serverOverride}`
+    : hostHeader
+      ? `${protocol}://${hostHeader}`
+      : reqUrl.origin;
   const agentUrl = `${baseUrl}/api/agent-inventory/${token}`;
   const version = "1.18";
   const winZipUrl = `https://github.com/glpi-project/glpi-agent/releases/download/${version}/GLPI-Agent-${version}-x64.zip`;
@@ -39,10 +145,10 @@ export async function GET(req: Request, { params }: { params: Promise<{ token: s
   const linuxInstallerUrl = `https://github.com/glpi-project/glpi-agent/releases/download/${version}/glpi-agent-${version}-linux-installer.pl`;
   const macPkgUrl = `https://github.com/glpi-project/glpi-agent/releases/download/${version}/GLPI-Agent-${version}_x86_64.pkg`;
 
-  // Script .bat: tải GLPI Agent portable → tìm glpi-agent.bat → chạy --server
+  // Script .bat: tải GLPI Agent portable → tìm glpi-agent.bat → chạy --local + curl POST
   const batContent = `@echo off
 chcp 65001 >nul
-title CRM - Thu thap thong tin (GLPI Agent)
+title CRM Inventory (GLPI Agent)
 setlocal enabledelayedexpansion
 cd /d "%~dp0"
 
@@ -54,99 +160,107 @@ set "AGENT_EXE="
 
 echo ============================================
 echo   CRM Agent - GLPI Agent Inventory
-echo   Token: %USERNAME%@%COMPUTERNAME%
 echo ============================================
 echo.
 
 :: === Buoc 1: Tim / Tai GLPI Agent ===
-echo [1/3] Kiem tra GLPI Agent...
+echo Step 1/3: Checking for GLPI Agent...
 
-:: Tim glpi-agent.bat trong thu muc cache
+:: Search cache for glpi-agent.bat or glpi-agent.pl
 for /f "delims=" %%f in ('dir /s /b "%TEMP_DIR%\\glpi-agent.bat" 2^>nul') do set "AGENT_EXE=%%f"
+if not defined AGENT_EXE (
+  for /f "delims=" %%f in ('dir /s /b "%TEMP_DIR%\\glpi-agent.pl" 2^>nul') do set "AGENT_EXE=%%f"
+)
 if defined AGENT_EXE (
-    echo Da co GLPI Agent tai: !AGENT_EXE!
+    echo Found cached: !AGENT_EXE!
     goto :run_agent
 )
 
+:: Not cached - download
 if not exist "%TEMP_DIR%" mkdir "%TEMP_DIR%"
 
-echo Dang tai GLPI Agent %AGENT_VERSION% (31MB)...
-curl -L --progress-bar -o "%TEMP_DIR%\\agent.zip" "%AGENT_ZIP_URL%" 2>nul
+echo Downloading GLPI Agent %AGENT_VERSION% (31MB) - please wait...
+curl -fSL --progress-bar -o "%TEMP_DIR%\\agent.zip" "%AGENT_ZIP_URL%"
 if %errorlevel% neq 0 (
+    echo Retrying with PowerShell...
     powershell -Command "Invoke-WebRequest -Uri '%AGENT_ZIP_URL%' -OutFile '%TEMP_DIR%\\agent.zip'" >nul 2>&1
 )
 
-if not exist "%TEMP_DIR%\\agent.zip%" (
-    echo [LOI] Khong the tai GLPI Agent. Vui long kiem tra internet.
+if not exist "%TEMP_DIR%\\agent.zip" (
+    echo [ERROR] Cannot download GLPI Agent. Check internet connection.
     echo.
-    echo Ban co the tai thu cong: %AGENT_ZIP_URL%
+    echo Manual download: %AGENT_ZIP_URL%
     pause
     exit /b 1
 )
 
-echo Giai nen ...
+echo Extracting...
 powershell -Command "Expand-Archive -Path '%TEMP_DIR%\\agent.zip' -DestinationPath '%TEMP_DIR%' -Force" >nul 2>&1
 del "%TEMP_DIR%\\agent.zip" >nul 2>&1
 
-:: Tim lai glpi-agent.bat sau khi giai nen
+:: Find glpi-agent.bat or .pl
 for /f "delims=" %%f in ('dir /s /b "%TEMP_DIR%\\glpi-agent.bat" 2^>nul') do set "AGENT_EXE=%%f"
+if not defined AGENT_EXE (
+  for /f "delims=" %%f in ('dir /s /b "%TEMP_DIR%\\glpi-agent.pl" 2^>nul') do set "AGENT_EXE=%%f"
+)
 
 if not defined AGENT_EXE (
-    echo [LOI] Khong tim thay glpi-agent.bat sau khi giai nen.
+    echo [ERROR] Cannot find glpi-agent after extraction.
+    echo.
+    echo Contents of %TEMP_DIR%:
+    dir /s "%TEMP_DIR%"
     pause
     exit /b 1
 )
-echo OK.
+echo Found: !AGENT_EXE!
 
-:: === Buoc 2: Chay GLPI Agent (local → JSON) ===
+:: === Buoc 2: Chay GLPI Agent ===
 :run_agent
 echo.
-echo [2/3] Dang thu thap thong tin...
+echo Step 2/3: Collecting inventory (takes ~1 min)...
 
-:: Dung absolute path de tranh loi working directory
 set "BASE_DIR=%~dp0"
-set "OUTPUT_PARENT=%BASE_DIR%%TEMP_DIR%\\output"
-if not exist "%OUTPUT_PARENT%" mkdir "%OUTPUT_PARENT%" >nul 2>&1
+set "OUTPUT_DIR=%BASE_DIR%%TEMP_DIR%\\output"
+if not exist "%OUTPUT_DIR%" mkdir "%OUTPUT_DIR%" >nul 2>&1
 
-echo Dang chay GLPI Agent (co the mat ~1 phut)...
 cd /d "%BASE_DIR%"
-"!AGENT_EXE!" --local "%OUTPUT_PARENT%" --json --full --no-ssl-check --logfile agent-log.txt
+echo Running: !AGENT_EXE! --local "%OUTPUT_DIR%" --json --full
+"!AGENT_EXE!" --local "%OUTPUT_DIR%" --json --full --logfile agent-log.txt
 set "EXIT_CODE=%ERRORLEVEL%"
+echo Agent exit code: %EXIT_CODE%
 
-:: Doi mot chut de agent ghi file xong
-ping -n 3 127.0.0.1 >nul 2>&1
+:: Wait for file to be written
+ping -n 4 127.0.0.1 >nul 2>&1
 
-:: --full tao 1 file duy nhat (no extension) trong output parent dir
-:: Tim file JSON/test cac kieu: *.json, hoac file khong co extension
+:: Find output JSON file
 set "JSON_FILE="
-for /f "delims=" %%f in ('dir /b "%OUTPUT_PARENT%\\*.json" 2^>nul') do set "JSON_FILE=%OUTPUT_PARENT%\\%%f"
+for /f "delims=" %%f in ('dir /b "%OUTPUT_DIR%\\*.json" 2^>nul') do set "JSON_FILE=%OUTPUT_DIR%\\%%f"
 if not defined JSON_FILE (
-    :: --full co the tao file khong co extension (ten giong dir name)
-    for /f "delims=" %%f in ('dir /b /a-d "%OUTPUT_PARENT%" 2^>nul') do set "JSON_FILE=%OUTPUT_PARENT%\\%%f"
+    for /f "delims=" %%f in ('dir /b /a-d "%OUTPUT_DIR%" 2^>nul') do set "JSON_FILE=%OUTPUT_DIR%\\%%f"
 )
 
-if defined JSON_FILE (
-    echo Da thu thap xong: !JSON_FILE!
+if not defined JSON_FILE (
+    echo [ERROR] No output file found from GLPI Agent.
+    if exist agent-log.txt (
+        echo.
+        echo Agent log:
+        type agent-log.txt
+    )
     echo.
-    echo [3/3] Dang gui du lieu len CRM...
-    curl -X POST -H "Content-Type: application/json" -d @"!JSON_FILE!" "%CRM_URL%"
-    echo.
-    echo Hoan thanh!
-    :: Xoa output da gui, giu lai agent cho lan sau
-    del "!JSON_FILE!" >nul 2>&1
-) else (
-    echo [LOI] Khong tim thay file JSON tu GLPI Agent.
-    echo Kiem tra log:
-    if exist agent-log.txt type agent-log.txt
-    echo.
-    echo Danh sach thu muc output:
+    echo Output directory contents:
     dir /s "%OUTPUT_DIR%" 2>nul
+    pause
+    exit /b 1
 )
 
-if exist agent-log.txt del agent-log.txt >nul 2>&1
+echo Collected: !JSON_FILE!
 echo.
-echo GLPI Agent da duoc cache tai: %TEMP_DIR%
-echo Lan sau chay se khong can tai lai.
+echo Step 3/3: Sending to CRM...
+curl -s -X POST -H "Content-Type: application/json" -d @"!JSON_FILE!" "%CRM_URL%" --max-time 60
+echo.
+echo Done!
+del "!JSON_FILE!" >nul 2>&1
+if exist agent-log.txt del agent-log.txt >nul 2>&1
 echo.
 pause`;
 
@@ -365,11 +479,11 @@ if [ -z "\$AGENT" ]; then
     if [ -f "\$AGENT_DIR/agent.pkg" ]; then
         echo "Mo rong PKG vao cache..."
         pkgutil --expand "\$AGENT_DIR/agent.pkg" "\$AGENT_DIR/pkg-contents" 2>/dev/null
-        AGENT=$(find "\$AGENT_DIR/pkg-contents" -name "glpi-agent" -type f -o -name "glpi-agent.pl" -type f 2>/dev/null | head -1)
-        if [ -z "\$AGENT" ]; then
-            tar xzf "\$AGENT_DIR/agent.pkg" -C "\$AGENT_DIR" 2>/dev/null
-            AGENT=$(find "\$AGENT_DIR" -name "glpi-agent" -type f -o -name "glpi-agent.pl" -type f 2>/dev/null | head -1)
-        fi
+        # Giai nen Payload (cpio.gz) tu cac sub-package
+        for payload in \$(find "\$AGENT_DIR/pkg-contents" -name "Payload" -type f 2>/dev/null); do
+            (cd "\$(dirname "\$payload")" && cat Payload | gunzip -dc 2>/dev/null | cpio -id 2>/dev/null) || true
+        done
+        AGENT=\$(find "\$AGENT_DIR/pkg-contents" -name "glpi-agent" -type f -o -name "glpi-agent.pl" -type f 2>/dev/null | head -1)
         [ -n "\$AGENT" ] && chmod +x "\$AGENT" 2>/dev/null
         # Rename agent to predictable path
         if [ -n "\$AGENT" ] && [ "\$AGENT" != "\$AGENT_DIR/glpi-agent.pl" ]; then
@@ -488,13 +602,24 @@ echo "GLPI Agent da duoc cache tai: \$AGENT_DIR"
 echo "Lan sau chay se khong can tai lai."
 `;
 
-  // Detect OS from user-agent
+  // Detect mode: ?mode=simple (built-in commands, không cần tải GLPI Agent) | default/full
+  const mode = reqUrl.searchParams.get("mode") || "";
+  const useSimple = mode === "simple";
+
+  // Detect OS
+  const osOverride = reqUrl.searchParams.get("os") || "";
   const ua = req.headers.get("user-agent") || "";
-  const isWindows = ua.includes("Windows") || ua.includes("wow64");
-  const isMac = ua.includes("Mac OS") || ua.includes("Darwin") || ua.includes("macOS");
+  const isWindows = osOverride === "windows" || (!osOverride && (ua.includes("Windows") || ua.includes("wow64")));
+  const isMac = osOverride === "macos" || (!osOverride && (ua.includes("Mac OS") || ua.includes("Darwin") || ua.includes("macOS")));
 
   let filename: string, content: string, mime: string;
-  if (isWindows) {
+
+  if (useSimple && isWindows) {
+    // === Simple mode: built-in Windows commands, không cần tải GLPI Agent ===
+    filename = "thu-thap-nhanh.bat";
+    content = createSimpleWindowsScript(agentUrl).replace(/\n/g, "\r\n"); // CRLF for cmd.exe
+    mime = "application/bat";
+  } else if (isWindows) {
     filename = "thu-thap.bat";
     content = batContent.replace(/\n/g, "\r\n"); // CRLF for cmd.exe
     mime = "application/bat";

@@ -8325,13 +8325,15 @@ model CollectionSession {
   addressId     String?  // Địa chỉ khách hàng (nơi đặt máy)
   address       CustomerAddress? @relation(fields: [addressId], references: [id])
   token         String   @unique // Token dùng 1 lần cho GLPI Agent URL
-  status        String   @default("pending") // pending | active | completed | failed
+  status        String   @default("pending") // pending | active | data_received | completed | failed
   collectedById String?  // User CRM tạo phiên
   deviceCount   Int      @default(0) // Số thiết bị thu thập được
   rawPayload    String?  // Raw JSON từ GLPI Agent (debug)
+  reviewData    String?  // JSON: parsed devices + match results (chờ user duyệt)
   expiresAt     DateTime? // Token hết hạn lúc nào
   startedAt     DateTime?
   completedAt   DateTime?
+  approvedAt    DateTime? // User duyệt lúc nào
   errorMessage  String?  // Lỗi nếu có
 
   devices       CustomerCollectedDevice[] // Các thiết bị thu thập trong phiên này

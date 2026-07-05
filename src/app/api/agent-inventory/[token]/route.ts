@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { createReviewData, confirmDevice } from "@/lib/inventory-matching";
 
 /* ===== GLPI Agent Inventory Parser =====
  *
@@ -9,6 +10,10 @@ import { prisma } from "@/lib/db";
  *   { "action": "inventory", "content": { "hardware": {...}, "cpus": [...], "networks": [...], "operatingsystem": {...}, ... } }
  *
  * Parser tự động detect format.
+ *
+ * === Flow ===
+ *   Agent POST → parse → match với DB → lưu reviewData → status="data_received"
+ *   User duyệt → POST /confirm → tạo/cập nhật devices → status="completed"
  */
 
 type DeviceRecord = {
@@ -801,7 +806,11 @@ function formatBytes(bytes: number): string {
   return `${bytes} B`;
 }
 
-/* ===== Route Handler ===== */
+/* ===== Route Handler: Agent gửi dữ liệu =====
+ *
+ * Agent POST → parse → match với DB → lưu reviewData → status="data_received"
+ * KHÔNG tạo/cập nhật device ngay. User phải duyệt qua POST /confirm.
+ */
 
 export async function POST(req: Request, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
@@ -816,8 +825,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
     return Response.json({ error: "Invalid token", code: "INVALID_TOKEN" }, { status: 404 });
   }
 
-  if (session.status === "failed") {
-    return Response.json({ error: "Session failed", code: "SESSION_FAILED" }, { status: 410 });
+  if (session.status !== "pending") {
+    // Đã nhận dữ liệu rồi (data_received / completed / failed) — từ chối
+    return Response.json({ error: "Session already processed", code: "SESSION_USED" }, { status: 410 });
   }
 
   if (session.expiresAt && new Date() > session.expiresAt) {
@@ -840,218 +850,28 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
   const devices = parseInventory(body);
   const rawPayload = JSON.stringify(body);
 
-  // Mark session as active (first time or subsequent)
-  if (session.status === "pending") {
-    await prisma.collectionSession.update({
-      where: { id: session.id },
-      data: { status: "active", startedAt: new Date(), rawPayload },
-    });
-  } else {
-    // Append raw payload (keep history)
-    await prisma.collectionSession.update({
-      where: { id: session.id },
-      data: { rawPayload: session.rawPayload
-        ? `${session.rawPayload}\n---NEXT SUBMISSION---\n${rawPayload}`
-        : rawPayload },
-    });
-  }
+  // Chạy matching với DB
+  const reviewData = await createReviewData(session.customerId, devices as Record<string, unknown>[]);
 
-  // Create or UPDATE device records (dedup by serialNumber + deviceType for same customer)
-  const created: Array<Record<string, unknown>> = [];
-  const updated: Array<Record<string, unknown>> = [];
-  // Map of hardware UUID / deviceId → Prisma ID, so child devices (monitors) can reference parent
-  const computerPrismaIdMap = new Map<string, string>();
-
-  // Phase 1: Create/update computers first (they are the parents)
-  const computerDevices = devices.filter(d => d.deviceType === "computer" || d.deviceType === "desktop" || d.deviceType === "laptop" || d.deviceType === "server" || d.deviceType === "aio" || d.deviceType === "tablet");
-  const childDevices = devices.filter(d => !computerDevices.includes(d));
-
-  for (const d of computerDevices) {
-    // Try to find existing device by serialNumber (most reliable) OR by matching name+manufacturer
-    let existing: any = null;
-    if (d.serialNumber) {
-      existing = await prisma.customerCollectedDevice.findFirst({
-        where: {
-          customerId: session.customerId,
-          deviceType: d.deviceType,
-          serialNumber: d.serialNumber,
-        },
-      });
-    }
-    // Fallback: match by manufacturer+modelName if no serial
-    if (!existing && d.manufacturer && d.modelName) {
-      existing = await prisma.customerCollectedDevice.findFirst({
-        where: {
-          customerId: session.customerId,
-          deviceType: d.deviceType,
-          manufacturer: d.manufacturer,
-          modelName: d.modelName,
-        },
-      });
-    }
-
-    // Extract the hardware UUID (hardware.uuid) stored in notes "deviceid:..." by parser
-    const deviceidMatch = d.notes?.match(/deviceid:\s*([^\s]+)/);
-    const hwDeviceId = deviceidMatch?.[1] || "";
-
-    if (existing) {
-      // UPDATE existing device
-      const device = await prisma.customerCollectedDevice.update({
-        where: { id: existing.id },
-        data: {
-          manufacturer: d.manufacturer || existing.manufacturer,
-          modelName: d.modelName || existing.modelName,
-          serialNumber: d.serialNumber || existing.serialNumber,
-          ipAddress: d.ipAddress || existing.ipAddress,
-          macAddress: d.macAddress || existing.macAddress,
-          cpu: d.cpu || existing.cpu,
-          ram: d.ram || existing.ram,
-          disk: d.disk || existing.disk,
-          os: d.os || existing.os,
-          componentsJson: d.componentsJson || existing.componentsJson,
-          notes: d.notes ? (existing.notes ? `${existing.notes}\n${d.notes}` : d.notes) : existing.notes,
-          sessionId: session.id,
-          condition: existing.condition || null,
-          collectedAt: new Date(),
-        },
-        include: {
-          address: { select: { id: true, label: true, address: true } },
-          assignedTo: { select: { id: true, firstName: true, lastName: true, code: true, department: true } },
-        },
-      });
-      updated.push(device);
-      // Map hardware deviceId → Prisma ID for child device linking
-      if (hwDeviceId) computerPrismaIdMap.set(hwDeviceId, device.id);
-      computerPrismaIdMap.set(d.serialNumber || d.modelName, device.id);
-    } else {
-      // CREATE new device
-      const device = await prisma.customerCollectedDevice.create({
-        data: {
-          customerId: session.customerId,
-          addressId: session.addressId,
-          deviceType: d.deviceType,
-          manufacturer: d.manufacturer || null,
-          modelName: d.modelName || null,
-          serialNumber: d.serialNumber || null,
-          ipAddress: d.ipAddress || null,
-          macAddress: d.macAddress || null,
-          cpu: d.cpu || null,
-          ram: d.ram || null,
-          disk: d.disk || null,
-          os: d.os || null,
-          componentsJson: d.componentsJson || null,
-          notes: d.notes || null,
-          collectedById: session.collectedById || undefined,
-          sessionId: session.id,
-          status: "active",
-          condition: null,
-        },
-        include: {
-          address: { select: { id: true, label: true, address: true } },
-          assignedTo: { select: { id: true, firstName: true, lastName: true, code: true, department: true } },
-        },
-      });
-      created.push(device);
-      if (hwDeviceId) computerPrismaIdMap.set(hwDeviceId, device.id);
-      computerPrismaIdMap.set(d.serialNumber || d.modelName, device.id);
-    }
-  }
-
-  // Phase 2: Create/update child devices (monitors, printers etc.)
-  // Resolve parentDeviceId from parser's deviceId (hardware UUID) to actual Prisma ID
-  for (const d of childDevices) {
-    // Resolve parentDeviceId — parser set it to the hardware UUID string,
-    // we need to find the Prisma ID that was assigned to the computer
-    let resolvedParentId: string | null = null;
-    if (d.parentDeviceId) {
-      resolvedParentId = computerPrismaIdMap.get(d.parentDeviceId) || null;
-    }
-
-    let existing: any = null;
-    if (d.serialNumber) {
-      existing = await prisma.customerCollectedDevice.findFirst({
-        where: {
-          customerId: session.customerId,
-          deviceType: d.deviceType,
-          serialNumber: d.serialNumber,
-        },
-      });
-    }
-    if (!existing && d.manufacturer && d.modelName) {
-      existing = await prisma.customerCollectedDevice.findFirst({
-        where: {
-          customerId: session.customerId,
-          deviceType: d.deviceType,
-          manufacturer: d.manufacturer,
-          modelName: d.modelName,
-        },
-      });
-    }
-
-    if (existing) {
-      const device = await prisma.customerCollectedDevice.update({
-        where: { id: existing.id },
-        data: {
-          manufacturer: d.manufacturer || existing.manufacturer,
-          modelName: d.modelName || existing.modelName,
-          serialNumber: d.serialNumber || existing.serialNumber,
-          componentsJson: d.componentsJson || existing.componentsJson,
-          notes: d.notes ? (existing.notes ? `${existing.notes}\n${d.notes}` : d.notes) : existing.notes,
-          sessionId: session.id,
-          parentDeviceId: resolvedParentId || existing.parentDeviceId,
-          collectedAt: new Date(),
-        },
-        include: {
-          address: { select: { id: true, label: true, address: true } },
-          assignedTo: { select: { id: true, firstName: true, lastName: true, code: true, department: true } },
-        },
-      });
-      updated.push(device);
-    } else {
-      const device = await prisma.customerCollectedDevice.create({
-        data: {
-          customerId: session.customerId,
-          addressId: session.addressId,
-          deviceType: d.deviceType,
-          manufacturer: d.manufacturer || null,
-          modelName: d.modelName || null,
-          serialNumber: d.serialNumber || null,
-          componentsJson: d.componentsJson || null,
-          notes: d.notes || null,
-          collectedById: session.collectedById || undefined,
-          sessionId: session.id,
-          parentDeviceId: resolvedParentId,
-          status: "active",
-          condition: null,
-        },
-        include: {
-          address: { select: { id: true, label: true, address: true } },
-          assignedTo: { select: { id: true, firstName: true, lastName: true, code: true, department: true } },
-        },
-      });
-      created.push(device);
-    }
-  }
-
-  // Update session stats
-  const totalDevices = await prisma.customerCollectedDevice.count({
-    where: { customerId: session.customerId, sessionId: session.id },
-  });
-
+  // Lưu reviewData + rawPayload, chuyển status → data_received
   await prisma.collectionSession.update({
     where: { id: session.id },
     data: {
-      deviceCount: totalDevices,
-      completedAt: new Date(), // bump timestamp
+      status: "data_received",
+      startedAt: new Date(),
+      rawPayload,
+      reviewData: JSON.stringify(reviewData),
     },
   });
 
   return Response.json({
     success: true,
-    message: `Created ${created.length}, updated ${updated.length} devices`,
-    created: created.length,
-    updated: updated.length,
-    totalDevices,
+    message: `Received ${reviewData.devices.length} devices. Waiting for review.`,
+    totalParsed: reviewData.devices.length,
+    matched: reviewData.devices.filter(d => d.match.found).length,
+    newDevices: reviewData.devices.filter(d => !d.match.found).length,
+    pendingParents: reviewData.pendingParents,
     sessionId: session.id,
+    status: "data_received",
   });
 }

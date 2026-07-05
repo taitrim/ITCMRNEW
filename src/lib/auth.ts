@@ -40,6 +40,17 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     }),
   ],
   callbacks: {
+    async authorized({ request, auth }) {
+      const { pathname } = request.nextUrl;
+      // Luôn cho phép login page, auth API routes, và agent inventory (dùng token)
+      if (
+        pathname === "/login" ||
+        pathname.startsWith("/api/auth") ||
+        pathname.startsWith("/api/agent-inventory")
+      ) return true;
+      // Chặn nếu chưa đăng nhập
+      return !!auth?.user;
+    },
     async jwt({ token, user, trigger }) {
       if (user) {
         token.id = user.id;

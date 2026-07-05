@@ -7,31 +7,23 @@ echo   ITSM System - Start Services
 echo ========================================
 echo.
 
-echo [1/3] Starting MariaDB...
-sc query MySQL >nul 2>&1
-if %errorlevel% equ 0 (
-    sc start MySQL >nul 2>&1
-    echo   [OK] MariaDB is running
-) else (
-    echo   [!] MariaDB service not found. Run: mysqld --console
+echo [1/2] Killing old Next.js on port 3000...
+for /f "tokens=5" %%a in ('netstat -ano ^| findstr ":3000" ^| findstr "LISTENING"') do (
+    taskkill /f /pid %%a >nul 2>&1
+    timeout /t 2 /nobreak >nul
 )
+echo   [OK] Port 3000 is free
 echo.
 
-echo [2/3] Starting GLPI backend (http://localhost:8080)...
-start "GLPI Backend" cmd /c "cd /d D:\GLPI && php -S localhost:8080 -t .\public"
-echo   [OK] GLPI backend at http://localhost:8080
-echo.
-
-echo [3/3] Starting Next.js frontend (http://localhost:3000)...
+echo [2/2] Starting Next.js frontend (http://localhost:3000)...
 start "Next.js Frontend" cmd /c "cd /d D:\SOFT\NEW CRM && npm run dev"
 echo   [OK] Frontend at http://localhost:3000
 echo.
 
 echo ========================================
-echo   All services started:
+echo   Service started:
 echo     Frontend: http://localhost:3000
-echo     GLPI:     http://localhost:8080
-echo     MariaDB:  port 3306
+echo     Database: SQLite (prisma/dev.db)
 echo ========================================
 echo.
 echo Login: admin / admin123

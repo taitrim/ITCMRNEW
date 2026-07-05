@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { SessionProvider } from "next-auth/react";
 import { Sidebar } from "@/components/sidebar";
 import { BottomNav } from "@/components/mobile/bottom-nav";
 import { MobileHeader } from "@/components/mobile/mobile-header";
@@ -15,6 +16,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const router = useRouter();
 
   return (
+    <SessionProvider refetchInterval={300} refetchOnWindowFocus={true}>
     <div className="flex h-screen overflow-hidden bg-surface">
       <Sidebar />
       <div className="flex-1 flex flex-col min-w-0">
@@ -63,5 +65,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </div>
       </BottomSheet>
     </div>
+    </SessionProvider>
   );
 }

@@ -7,7 +7,7 @@ import {
   LayoutDashboard, Ticket, Kanban, Monitor, Box, KeyRound,
   Printer, BookOpen, FileText, Building2, Building, MapPin, Users,
   ChevronDown, LogOut, Settings, Wrench, AlertTriangle,
-  Globe, Shield, Wallet, FolderKanban, HardDrive,
+  Globe, Shield, Wallet, FolderKanban, HardDrive, Download,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
@@ -53,6 +53,7 @@ const nav: NavGroup[] = [
       { href: "/companies", label: "Công ty phụ trách", icon: <Building size={18} /> },
       { href: "/customer-employees", label: "Nhân viên KH", icon: <Users size={18} /> },
       { href: "/customer-devices", label: "Quản lý thiết bị", icon: <HardDrive size={18} /> },
+      { href: "/agent-updates", label: "Cập nhật Agent", icon: <Download size={18} /> },
     ],
   },
   {
