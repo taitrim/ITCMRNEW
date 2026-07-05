@@ -234,7 +234,7 @@ echo.
 echo Step 3/3: Sending to CRM...
 echo [3/3] Sending to CRM >> "%LOG_FILE%"
 
-powershell -Command "$c = Get-Content -Raw '!JSON_FILE!'; try { Invoke-WebRequest -Uri '%CRM_URL%' -Method POST -ContentType 'application/json' -Body $c -UseBasicParsing | ForEach-Object { $_.StatusCode } } catch { Write-Output 'FAIL:' $_.Exception.Message }" 2>>"%LOG_FILE%"
+powershell -Command "$c = Get-Content -Raw '!JSON_FILE!' -ErrorAction Stop; $p = $c | ConvertFrom-Json; $h = $p.hardware; $sn = if ($p.bios.sserial) { $p.bios.sserial } else { $h.uuid }; $body = @{ action='inventory'; deviceid=('' + $h.name + '-' + $sn); content=$p } | ConvertTo-Json -Depth 15 -Compress; try { Invoke-WebRequest -Uri '%CRM_URL%' -Method POST -ContentType 'application/json' -Body $body -UseBasicParsing | ForEach-Object { $_.StatusCode; Write-Output 'CRM OK' } } catch { Write-Output 'FAIL:' $_.Exception.Message }" 2>>"%LOG_FILE%"
 echo.
 echo Done!
 echo Done! >> "%LOG_FILE%"
