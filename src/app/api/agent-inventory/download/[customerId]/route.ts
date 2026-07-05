@@ -181,75 +181,94 @@ if not defined AGENT_EXE (
 echo Found: !AGENT_EXE!
 echo Found: !AGENT_EXE! >> "%LOG_FILE%"
 
-:: === Buoc 2: Chay GLPI Agent ===
+:: === Buoc 2: Chay GLPI Agent (co timeout tranh bi treo) ===
 :run_agent
 echo.
 echo ============================================
 echo   [2/3] THU THAP THIET BI
 echo ============================================
+echo. >> "%LOG_FILE%"
+echo ============================================ >> "%LOG_FILE%"
+echo   [2/3] THU THAP THIET BI >> "%LOG_FILE%"
+echo ============================================ >> "%LOG_FILE%"
+
 set "BASE_DIR=%~dp0"
 set "OUTPUT_DIR=%BASE_DIR%%TEMP_DIR%\\output"
-if not exist "%OUTPUT_DIR%" mkdir "%OUTPUT_DIR%" >nul 2>&1
+
+:: Xoa output cu
+if exist "%OUTPUT_DIR%" rmdir /s /q "%OUTPUT_DIR%" >nul 2>&1
+mkdir "%OUTPUT_DIR%" >nul 2>&1
 
 cd /d "%BASE_DIR%"
-echo Dang chay GLPI Agent (khoang vai giay)...
-echo CMD: !AGENT_EXE! --local "%OUTPUT_DIR%" --json --full >> "%LOG_FILE%"
-"!AGENT_EXE!" --local "%OUTPUT_DIR%" --json --full --logfile agent-log.txt 2>>"%LOG_FILE%"
-set "EXIT_CODE=%ERRORLEVEL%"
+echo Dang chay GLPI Agent (toi da 120 giay)...
+echo [2/3] Running: !AGENT_EXE! >> "%LOG_FILE%"
 
-if %EXIT_CODE% neq 0 (
-    echo.
-    echo [LOI] GLPI Agent thoat voi ma %EXIT_CODE%
-    echo [LOI] Agent exit code %EXIT_CODE% >> "%LOG_FILE%"
-    if exist agent-log.txt (
-        echo Chi tiet:
-        type agent-log.txt
-        type agent-log.txt >> "%LOG_FILE%"
-    )
-    echo.
-    goto :end
-)
-echo GLPI Agent chay thanh cong!
-echo Agent OK >> "%LOG_FILE%"
+:: Chay agent trong cua so rieng (de kill neu bi treo boi RemoteInventory)
+start "GLPI-Agent-CRM" /MIN cmd /c ""!AGENT_EXE!" --local "%OUTPUT_DIR%" --json --full --logfile "%CD%\\agent-log.txt"" >nul 2>"%CD%\\agent-err.log"
 
-:: Tim file ket qua
-ping -n 3 127.0.0.1 >nul 2>&1
-
+:: Doi file ket qua xuat hien (toi da 120 giay)
+set "TIMEOUT_SEC=120"
+set /a "ELAPSED=0"
 set "JSON_FILE="
+
+:wait_loop
+if !ELAPSED! geq %TIMEOUT_SEC% goto :agent_timeout
+ping -n 2 127.0.0.1 >nul
+set /a "ELAPSED+=1"
 for /f "delims=" %%f in ('dir /b "%OUTPUT_DIR%" 2^>nul') do (
     if not defined JSON_FILE set "JSON_FILE=%OUTPUT_DIR%\\%%f"
 )
-dir /b "%OUTPUT_DIR%" >> "%LOG_FILE%" 2>&1
+if not defined JSON_FILE goto :wait_loop
 
-if not defined JSON_FILE (
-    echo.
-    echo [LOI] Khong tim thay file ket qua tu GLPI Agent.
-    echo No output file >> "%LOG_FILE%"
-    if exist agent-log.txt (
-        echo Agent log:
-        type agent-log.txt
-        type agent-log.txt >> "%LOG_FILE%"
-    )
-    echo Cac file trong output:
-    dir /s "%OUTPUT_DIR%" 2>nul
-    dir /s "%OUTPUT_DIR%" >> "%LOG_FILE%" 2>&1
-    echo.
-    goto :end
-)
-
-echo File ket qua: !JSON_FILE!
+:: === File tim thay, kill agent ===
+taskkill /f /fi "WINDOWTITLE eq GLPI-Agent-CRM" >nul 2>&1
+ping -n 2 127.0.0.1 >nul
+echo GLPI Agent da tao file: !JSON_FILE!
 echo File: !JSON_FILE! >> "%LOG_FILE%"
-echo.
+goto :agent_done
 
-:: === Buoc 3: Gui len CRM ===
+:agent_timeout
+echo.
+echo [LOI] GLPI Agent khong tao file trong %TIMEOUT_SEC% giay.
+echo [LOI] Timeout %TIMEOUT_SEC%s >> "%LOG_FILE%"
+taskkill /f /fi "WINDOWTITLE eq GLPI-Agent-CRM" >nul 2>&1
+taskkill /f /im perl.exe >nul 2>&1
+:: Kiem tra lai file sau kill
+for /f "delims=" %%f in ('dir /b "%OUTPUT_DIR%" 2^>nul') do (
+    if not defined JSON_FILE set "JSON_FILE=%OUTPUT_DIR%\\%%f"
+)
+if defined JSON_FILE (
+    echo File tim thay sau kill: !JSON_FILE!
+    echo File (after kill): !JSON_FILE! >> "%LOG_FILE%"
+    goto :agent_done
+)
+if exist agent-log.txt (
+    echo Agent log:
+    type agent-log.txt
+    type agent-log.txt >> "%LOG_FILE%"
+)
+echo Cac file trong output:
+dir /s "%OUTPUT_DIR%" 2>nul
+dir /s "%OUTPUT_DIR%" >> "%LOG_FILE%" 2>&1
+goto :end
+
+:agent_done
+echo.
 echo ============================================
 echo   [3/3] GUI DU LIEU LEN CRM
 echo ============================================
+echo. >> "%LOG_FILE%"
+echo ============================================ >> "%LOG_FILE%"
+echo   [3/3] Gui len CRM >> "%LOG_FILE%"
+echo ============================================ >> "%LOG_FILE%"
+
 echo Dang doc file va gui...
-echo [3/3] Sending... >> "%LOG_FILE%"
+echo [3/3] Reading file !JSON_FILE! >> "%LOG_FILE%"
 
-powershell -Command "$c = Get-Content -Raw '!JSON_FILE!' -ErrorAction Stop; $p = $c | ConvertFrom-Json; $h = $p.hardware; $sn = if ($p.bios.sserial) { $p.bios.sserial } else { $h.uuid }; $deviceid = $h.name + '-' + $sn; Write-Output 'Thiet bi: ' $deviceid; $body = @{ action='inventory'; deviceid=$deviceid; content=$p } | ConvertTo-Json -Depth 15 -Compress; try { $r = Invoke-WebRequest -Uri '%CRM_URL%' -Method POST -ContentType 'application/json' -Body $body -UseBasicParsing -TimeoutSec 30; Write-Output 'CRM: ' $r.StatusCode; Write-Output 'GUI THANH CONG!' } catch { Write-Output 'LOI GUI: ' $_.Exception.Message }" 2>>"%LOG_FILE%"
+:: Trich xuat deviceid tu GLPI JSON, wrap dung format, POST len CRM
+powershell -Command "$c = Get-Content -Raw '!JSON_FILE!' -ErrorAction Stop; $p = $c | ConvertFrom-Json; $h = $p.hardware; $sn = if ($p.bios.sserial) { $p.bios.sserial } else { $h.uuid }; $deviceid = $h.name + '-' + $sn; Write-Output 'Thiet bi: ' $deviceid; $body = @{ action='inventory'; deviceid=$deviceid; content=$p } | ConvertTo-Json -Depth 15 -Compress; Write-Output 'Dang gui...'; try { $r = Invoke-WebRequest -Uri '%CRM_URL%' -Method POST -ContentType 'application/json' -Body $body -UseBasicParsing -TimeoutSec 30; $result = $r.Content | ConvertFrom-Json; if ($r.StatusCode -eq 200 -or $r.StatusCode -eq 201) { Write-Output 'CRM: ' $r.StatusCode; Write-Output 'GUI THANH CONG!' } else { Write-Output 'CRM: ' $r.StatusCode ' - ' $result } } catch { Write-Output 'LOI GUI: ' $_.Exception.Message }" 2>>"%LOG_FILE%"
 
+echo POST done >> "%LOG_FILE%"
 echo.
 echo ============================================
 echo   HOAN TAT
