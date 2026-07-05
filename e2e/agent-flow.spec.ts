@@ -109,7 +109,7 @@ test.describe('Agent Flow (customer key-based)', () => {
     const customers = await (await api.get('/api/customers')).json();
     const customerId = customers[0].id;
 
-    // Navigate to customer detail
+    // Navigate to customer detail (dedicated page)
     await page.goto(`/customers/${customerId}`);
     await page.waitForURL(`/customers/${customerId}`, { timeout: 15_000 });
     await page.waitForTimeout(1000);
@@ -129,5 +129,25 @@ test.describe('Agent Flow (customer key-based)', () => {
     await page.goto('/agent-updates');
     await page.waitForURL('/agent-updates', { timeout: 15_000 });
     await expect(page.getByRole('heading', { name: 'Cập nhật Agent' })).toBeVisible({ timeout: 10_000 });
+  });
+
+  test('Agent tab in customer list modal', async ({ page }) => {
+    await loginViaPage(page);
+    const api = page.request;
+    const customers = await (await api.get('/api/customers')).json();
+    const customerId = customers[0].id;
+
+    // Navigate to customers list page — it opens the detail in a modal
+    await page.goto(`/customers?id=${customerId}`);
+    await page.waitForURL(`/customers?id=${customerId}`, { timeout: 15_000 });
+    await page.waitForTimeout(1500);
+
+    // The modal should have an Agent tab button
+    const agentBtn = page.locator('button', { hasText: 'Agent' });
+    await expect(agentBtn).toBeVisible({ timeout: 10_000 });
+    await agentBtn.click();
+
+    // Verify agent config renders
+    await expect(page.locator('text=Cấu hình Agent')).toBeVisible({ timeout: 10_000 });
   });
 });

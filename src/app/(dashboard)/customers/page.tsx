@@ -7,6 +7,7 @@ import Link from "next/link";
 import { Search, Plus, Building2, User, Briefcase, MapPin, ChevronRight, Phone, Mail, SlidersHorizontal, X, Save, Trash2, Edit3, ExternalLink, Globe, Upload, Building, Users, Tag, CreditCard, Calendar, FileText, Shield, FolderKanban, Wallet, Monitor, Ticket, Wrench, AlertTriangle, Printer, KeyRound, Package, LayoutGrid, List as ListIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { AgentTab } from "./[id]/tabs/agent-tab";
 
 
 const ITEM_LABELS: Record<string, string> = {
@@ -601,6 +602,7 @@ function DetailCustomer({ id, onClose, onEdit }: { id: string; onClose: () => vo
     { key: "contacts", label: `Liên hệ` },
     { key: "employees", label: `Nhân viên` },
     { key: "devices", label: `Thiết bị` },
+    { key: "agent", label: "Agent" },
     { key: "items", label: `Hạng mục` },
     { key: "addresses", label: `Địa chỉ` },
   ];
@@ -636,6 +638,7 @@ function DetailCustomer({ id, onClose, onEdit }: { id: string; onClose: () => vo
           {tab === "contacts" && <ContactsContent customer={customer} />}
           {tab === "employees" && <EmployeesContent customer={customer} />}
           {tab === "devices" && <DevicesContent customerId={id} />}
+          {tab === "agent" && <AgentTab customerId={id} />}
           {tab === "items" && <ItemsContent customer={customer} id={id} />}
           {tab === "addresses" && <AddressesContent customer={customer} />}
         </div>

@@ -280,3 +280,28 @@ Every Friday:
 - `npm test` — 1 vitest pass
 - `npx playwright test` — 4/4 pass (submit→approve, submit→reject, Agent tab UI, setup)
 - `node scripts/check-file-sizes.mjs` — no breaches
+
+### ✅ ITSM-P03 — Clean up old collection-session flow
+
+**Status:** done
+**Started:** 2026-07-05
+**Completed:** 2026-07-05
+**Commits:** `cded8da`
+
+**Plan for this phase:**
+- [x] Remove "Thu thập" tab from both customer detail and customer list pages
+- [x] Delete old token-based API routes (`api/agent-inventory/[token]/*`)
+- [x] Delete old list route (`api/agent-inventory/list`)
+- [x] Delete old hardcoded-key agent route (`api/agent/inventory/*`)
+- [x] Delete old collection-sessions API (`api/customers/[id]/collection-sessions`)
+- [x] Delete old review API (`api/customer-devices/review/[sessionId]`)
+- [x] Remove `confirmDevice` + `createDevice` dead functions from `inventory-matching.ts`
+- [x] Remove `collection-sessions-tab.tsx` component file
+- [x] Remove `SessionsTab` import and `SessionsContent` from page files
+
+**Delivered:**
+- 9 old route files deleted
+- 2 page files cleaned up (removed Thu thập tab)
+- `inventory-matching.ts` shortened from 327 → 210 lines
+- ~2100 LOC of dead code removed
+- Build still clean, all E2E still pass
