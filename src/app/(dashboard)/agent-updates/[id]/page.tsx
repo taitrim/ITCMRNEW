@@ -2,10 +2,13 @@
 
 import { use, useState, useCallback, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Check, X, AlertTriangle, Monitor, Printer, HelpCircle, ChevronDown, ChevronRight } from "lucide-react";
+import {
+  ArrowLeft, Check, X, AlertTriangle, Monitor, Printer, HelpCircle,
+  ChevronDown, ChevronRight, UserPlus, Users
+} from "lucide-react";
 import DeviceComponentsPanel from "@/components/DeviceComponentsPanel";
 
-/* ===== Types (same as old review) ===== */
+/* ===== Types ===== */
 type MatchResult = {
   found: boolean;
   existingDeviceId: string | null;
@@ -15,6 +18,16 @@ type MatchResult = {
 };
 type ReviewDevice = { parsed: Record<string, unknown>; match: MatchResult };
 type ReviewData = { parsedAt: string; devices: ReviewDevice[]; pendingParents: number };
+
+type Employee = {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email?: string | null;
+  phone?: string | null;
+  position?: string | null;
+  department?: string | null;
+};
 
 /* ===== Helpers ===== */
 function deviceIcon(type: string) {
@@ -52,18 +65,165 @@ function fmt(val: unknown): string {
   return String(val);
 }
 
-/* ===== Comparison Row ===== */
-function DeviceRow({ device, index, checked, onToggle }: {
+/* ===== New Employee Inline Form ===== */
+function NewEmployeeForm({
+  onSave,
+  onCancel,
+}: {
+  onSave: (data: { firstName: string; lastName: string; email?: string; phone?: string; position?: string; department?: string }) => void;
+  onCancel: () => void;
+}) {
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [position, setPosition] = useState("");
+  const [department, setDepartment] = useState("");
+
+  return (
+    <div className="mt-2 p-2.5 bg-gray-50 rounded-lg border border-gray-200 space-y-2">
+      <div className="flex items-center gap-2">
+        <div className="flex-1">
+          <label className="text-[10px] text-gray-400">Tên</label>
+          <input value={firstName} onChange={e => setFirstName(e.target.value)}
+            className="w-full px-2 py-1 text-[11px] border border-gray-200 rounded focus:outline-none focus:border-blue-400" />
+        </div>
+        <div className="flex-1">
+          <label className="text-[10px] text-gray-400">Họ</label>
+          <input value={lastName} onChange={e => setLastName(e.target.value)}
+            className="w-full px-2 py-1 text-[11px] border border-gray-200 rounded focus:outline-none focus:border-blue-400" />
+        </div>
+      </div>
+      <div className="flex items-center gap-2">
+        <div className="flex-1">
+          <label className="text-[10px] text-gray-400">Email</label>
+          <input value={email} onChange={e => setEmail(e.target.value)}
+            className="w-full px-2 py-1 text-[11px] border border-gray-200 rounded focus:outline-none focus:border-blue-400" />
+        </div>
+        <div className="flex-1">
+          <label className="text-[10px] text-gray-400">SĐT</label>
+          <input value={phone} onChange={e => setPhone(e.target.value)}
+            className="w-full px-2 py-1 text-[11px] border border-gray-200 rounded focus:outline-none focus:border-blue-400" />
+        </div>
+      </div>
+      <div className="flex items-center gap-2">
+        <div className="flex-1">
+          <label className="text-[10px] text-gray-400">Chức vụ</label>
+          <input value={position} onChange={e => setPosition(e.target.value)}
+            className="w-full px-2 py-1 text-[11px] border border-gray-200 rounded focus:outline-none focus:border-blue-400" />
+        </div>
+        <div className="flex-1">
+          <label className="text-[10px] text-gray-400">Phòng ban</label>
+          <input value={department} onChange={e => setDepartment(e.target.value)}
+            className="w-full px-2 py-1 text-[11px] border border-gray-200 rounded focus:outline-none focus:border-blue-400" />
+        </div>
+      </div>
+      <div className="flex items-center justify-end gap-2 pt-1">
+        <button onClick={onCancel}
+          className="px-2.5 py-1 text-[10px] text-gray-500 hover:text-gray-700">Huỷ</button>
+        <button onClick={() => onSave({ firstName, lastName, email: email || undefined, phone: phone || undefined, position: position || undefined, department: department || undefined })}
+          disabled={!firstName}
+          className="px-2.5 py-1 text-[10px] font-medium text-white bg-blue-600 rounded hover:bg-blue-700 disabled:opacity-50">
+          Tạo & gán
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ===== Employee Assignment UI ===== */
+function EmployeeAssignment({
+  deviceId,
+  deviceName,
+  employees,
+  assignedEmployeeId,
+  newEmployeeFirstName,
+  onChange,
+  onStartNew,
+  onCancelNew,
+  onNewEmployeeSave,
+  showNewForm,
+}: {
+  deviceId: string;
+  deviceName: string;
+  employees: Employee[];
+  assignedEmployeeId: string | null;
+  newEmployeeFirstName: string | null;
+  onChange: (employeeId: string | null) => void;
+  onStartNew: () => void;
+  onCancelNew: () => void;
+  onNewEmployeeSave: (data: { firstName: string; lastName: string; email?: string; phone?: string; position?: string; department?: string }) => void;
+  showNewForm: boolean;
+}) {
+  return (
+    <div className="border-t border-gray-100 px-3 py-2">
+      <div className="flex items-center gap-2">
+        <Users size={12} className="text-gray-400 shrink-0" />
+        <span className="text-[10px] text-gray-400 w-14 shrink-0">Gán cho</span>
+        <select
+          value={assignedEmployeeId || ""}
+          onChange={e => onChange(e.target.value || null)}
+          className="flex-1 px-2 py-1 text-[11px] border border-gray-200 rounded bg-white focus:outline-none focus:border-blue-400"
+        >
+          <option value="">— Chưa gán —</option>
+          {employees.map(emp => (
+            <option key={emp.id} value={emp.id}>
+              {emp.lastName} {emp.firstName}{emp.position ? ` (${emp.position})` : ""}
+            </option>
+          ))}
+        </select>
+        <button onClick={onStartNew}
+          className="px-2 py-1 text-[10px] text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded transition flex items-center gap-1">
+          <UserPlus size={11} /> NV mới
+        </button>
+      </div>
+
+      {newEmployeeFirstName && (
+        <div className="mt-1.5 text-[10px] text-blue-600 bg-blue-50 px-2 py-1 rounded">
+          <Check size={10} className="inline mr-1" />
+          Sẽ tạo nhân viên: <strong>{newEmployeeFirstName}</strong>
+        </div>
+      )}
+
+      {showNewForm && (
+        <NewEmployeeForm onSave={onNewEmployeeSave} onCancel={onCancelNew} />
+      )}
+    </div>
+  );
+}
+
+/* ===== Device Row ===== */
+function DeviceRow({
+  device, index, checked, onToggle,
+  employees, assignedEmployeeId, newEmployeeInfo,
+  showNewForm, onAssignmentChange, onStartNewEmployee, onCancelNewEmployee, onNewEmployeeSave,
+}: {
   device: ReviewDevice; index: number; checked: boolean; onToggle: () => void;
+  employees: Employee[];
+  assignedEmployeeId: string | null;
+  newEmployeeInfo: { firstName: string } | null;
+  showNewForm: boolean;
+  onAssignmentChange: (employeeId: string | null) => void;
+  onStartNewEmployee: () => void;
+  onCancelNewEmployee: () => void;
+  onNewEmployeeSave: (data: { firstName: string; lastName: string; email?: string; phone?: string; position?: string; department?: string }) => void;
 }) {
   const { parsed, match } = device;
   const type = (parsed.deviceType as string) || "computer";
   const isComputer = ["computer","desktop","laptop","server","aio","tablet"].includes(type);
   const [showFullInv, setShowFullInv] = useState(false);
   const componentsJson = parsed.componentsJson as string | undefined;
+  const deviceId = String(parsed.deviceId || index);
+
+  const employeeLabel = assignedEmployeeId
+    ? employees.find(e => e.id === assignedEmployeeId)
+      ? `${employees.find(e => e.id === assignedEmployeeId)!.lastName} ${employees.find(e => e.id === assignedEmployeeId)!.firstName}`
+      : "Đã chọn"
+    : newEmployeeInfo ? `Mới: ${newEmployeeInfo.firstName}` : null;
 
   return (
     <div className={`rounded-lg border ${checked ? "border-blue-300 bg-blue-50/40" : "border-gray-200 bg-white"}`}>
+      {/* Header */}
       <div className="flex items-center gap-2.5 px-3 py-2.5 border-b border-gray-100">
         <input type="checkbox" checked={checked} onChange={onToggle}
           className="w-3.5 h-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer shrink-0" />
@@ -80,6 +240,12 @@ function DeviceRow({ device, index, checked, onToggle }: {
             )}
           </div>
           {isComputer && <div className="text-[10px] text-gray-400 mt-0.5">{fmt(parsed.serialNumber)}</div>}
+          {employeeLabel && (
+            <div className="text-[10px] text-blue-600 mt-0.5">
+              <Users size={10} className="inline mr-0.5" />
+              {employeeLabel}
+            </div>
+          )}
         </div>
         <div className="shrink-0">
           {match.found ? confidenceBadge(match.confidence) : (
@@ -88,6 +254,7 @@ function DeviceRow({ device, index, checked, onToggle }: {
         </div>
       </div>
 
+      {/* Specs */}
       <div className="px-3 py-2.5 space-y-1.5">
         {isComputer ? (
           <>
@@ -110,6 +277,7 @@ function DeviceRow({ device, index, checked, onToggle }: {
         )}
       </div>
 
+      {/* Components (if any) */}
       {componentsJson && (
         <div className="border-t border-gray-100">
           <button onClick={() => setShowFullInv(!showFullInv)}
@@ -123,6 +291,22 @@ function DeviceRow({ device, index, checked, onToggle }: {
             </div>
           )}
         </div>
+      )}
+
+      {/* Employee Assignment */}
+      {checked && (
+        <EmployeeAssignment
+          deviceId={deviceId}
+          deviceName={fmt(parsed.name)}
+          employees={employees}
+          assignedEmployeeId={assignedEmployeeId}
+          newEmployeeFirstName={newEmployeeInfo?.firstName || null}
+          onChange={onAssignmentChange}
+          onStartNew={onStartNewEmployee}
+          onCancelNew={onCancelNewEmployee}
+          onNewEmployeeSave={onNewEmployeeSave}
+          showNewForm={showNewForm}
+        />
       )}
     </div>
   );
@@ -156,23 +340,44 @@ export default function SubmissionReviewPage({ params }: { params: Promise<{ id:
 
   const [submission, setSubmission] = useState<any>(null);
   const [reviewData, setReviewData] = useState<ReviewData | null>(null);
+  const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<{ status: string; confirmedCount: number } | null>(null);
 
-  // Load data
+  // Assignment state: deviceIndex -> assigned employee id | null
+  const [assignments, setAssignments] = useState<Record<number, string | null>>({});
+  // New employee state: deviceIndex -> employee data to create
+  const [newEmployees, setNewEmployees] = useState<Record<number, {
+    firstName: string; lastName: string; email?: string; phone?: string; position?: string; department?: string;
+  }>>({});
+  // Which device index is showing the new employee form
+  const [showNewFormFor, setShowNewFormFor] = useState<number | null>(null);
+
+  // Load submission + employees
   const loadData = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/agent-inventory/submissions/${id}`);
-      if (!res.ok) throw new Error((await res.json().catch(() => ({ error: "Lỗi" }))).error || `HTTP ${res.status}`);
-      const json = await res.json();
-      setSubmission(json.data);
-      const rd = json.data.reviewData;
+      const [subRes] = await Promise.all([
+        fetch(`/api/agent-inventory/submissions/${id}`),
+      ]);
+      if (!subRes.ok) throw new Error((await subRes.json().catch(() => ({ error: "Lỗi" }))).error || `HTTP ${subRes.status}`);
+      const subJson = await subRes.json();
+      setSubmission(subJson.data);
+      const rd = subJson.data.reviewData;
       setReviewData(rd);
+
+      // Load employees for this customer
+      if (subJson.data.customerId) {
+        const empRes = await fetch(`/api/customer-employees?customerId=${subJson.data.customerId}`);
+        if (empRes.ok) {
+          const empJson = await empRes.json();
+          setEmployees(empJson.data || []);
+        }
+      }
 
       // Auto-select all devices
       if (rd?.devices) {
@@ -202,16 +407,67 @@ export default function SubmissionReviewPage({ params }: { params: Promise<{ id:
     return { total, matched, new: total - matched };
   }, [reviewData]);
 
-  // Approve
+  // Assignment handlers
+  const handleAssignmentChange = useCallback((index: number, employeeId: string | null) => {
+    setAssignments(prev => ({ ...prev, [index]: employeeId }));
+    // If switching back to existing employee, clear new employee data for this device
+    if (employeeId) {
+      setNewEmployees(prev => {
+        const next = { ...prev };
+        delete next[index];
+        return next;
+      });
+    }
+  }, []);
+
+  const handleStartNewEmployee = useCallback((index: number) => {
+    setShowNewFormFor(index);
+  }, []);
+
+  const handleCancelNewEmployee = useCallback(() => {
+    setShowNewFormFor(null);
+  }, []);
+
+  const handleNewEmployeeSave = useCallback((index: number, data: {
+    firstName: string; lastName: string; email?: string; phone?: string; position?: string; department?: string;
+  }) => {
+    setNewEmployees(prev => ({ ...prev, [index]: data }));
+    setAssignments(prev => ({ ...prev, [index]: null })); // Clear existing assignment
+    setShowNewFormFor(null);
+  }, []);
+
+  // Approve — send assignments + newEmployees
   const handleApprove = useCallback(async () => {
     if (!submission || !reviewData || selected.size === 0) return;
     setSubmitting(true);
     try {
       const deviceIds = Array.from(selected).map(i => String(reviewData.devices[i].parsed.deviceId || i));
+
+      // Build assignments map using deviceId strings
+      const assignmentsMap: Record<string, string | null> = {};
+      const newEmployeesMap: Record<string, {
+        firstName: string; lastName: string; email?: string; phone?: string; position?: string; department?: string;
+      }> = {};
+
+      for (const i of selected) {
+        const devId = String(reviewData.devices[i].parsed.deviceId || i);
+
+        // If there's a new employee for this device, include in newEmployees
+        if (newEmployees[i]) {
+          newEmployeesMap[devId] = newEmployees[i];
+        } else if (assignments[i] !== undefined) {
+          assignmentsMap[devId] = assignments[i];
+        }
+      }
+
+      const body: Record<string, unknown> = { action: "approve", selectedDevices: deviceIds };
+      if (Object.keys(assignmentsMap).length > 0) body.assignments = assignmentsMap;
+      if (Object.keys(newEmployeesMap).length > 0) body.newEmployees = newEmployeesMap;
+
       const res = await fetch(`/api/agent-inventory/submissions/${id}/review`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "approve", selectedDevices: deviceIds }),
+        body: JSON.stringify(body),
       });
       if (!res.ok) throw new Error((await res.json()).error || `HTTP ${res.status}`);
       const json = await res.json();
@@ -221,7 +477,7 @@ export default function SubmissionReviewPage({ params }: { params: Promise<{ id:
     } finally {
       setSubmitting(false);
     }
-  }, [submission, reviewData, selected, id]);
+  }, [submission, reviewData, selected, id, assignments, newEmployees]);
 
   // Reject
   const handleReject = useCallback(async () => {
@@ -242,6 +498,15 @@ export default function SubmissionReviewPage({ params }: { params: Promise<{ id:
       setSubmitting(false);
     }
   }, [id]);
+
+  // Count assignments
+  const assignedCount = useMemo(() => {
+    let count = 0;
+    for (const i of selected) {
+      if (assignments[i] || newEmployees[i]) count++;
+    }
+    return count;
+  }, [selected, assignments, newEmployees]);
 
   if (loading) return <div className="flex items-center justify-center min-h-[50vh]"><div className="text-sm text-gray-400">Đang tải...</div></div>;
 
@@ -306,7 +571,8 @@ export default function SubmissionReviewPage({ params }: { params: Promise<{ id:
       {/* Controls */}
       <div className="flex items-center justify-between mb-3">
         <span className="text-xs text-gray-400">
-          ({selected.size}/{reviewData?.devices.length || 0} đã chọn)
+          ({selected.size}/{reviewData?.devices.length || 0} đã chọn
+          {assignedCount > 0 && <> · {assignedCount} đã gán</>})
         </span>
         <div className="flex items-center gap-2">
           <button onClick={handleReject} disabled={submitting}
@@ -327,7 +593,19 @@ export default function SubmissionReviewPage({ params }: { params: Promise<{ id:
           {reviewData.devices
             .map((d, i) => ({ d, i }))
             .filter(({ d }) => ["computer","desktop","laptop","server","aio","tablet"].includes((d.parsed.deviceType as string) || ""))
-            .map(({ d, i }) => <DeviceRow key={i} device={d} index={i} checked={selected.has(i)} onToggle={() => toggleDevice(i)} />)}
+            .map(({ d, i }) => (
+              <DeviceRow
+                key={i} device={d} index={i} checked={selected.has(i)} onToggle={() => toggleDevice(i)}
+                employees={employees}
+                assignedEmployeeId={assignments[i] ?? null}
+                newEmployeeInfo={newEmployees[i] ? { firstName: newEmployees[i].firstName } : null}
+                showNewForm={showNewFormFor === i}
+                onAssignmentChange={(empId) => handleAssignmentChange(i, empId)}
+                onStartNewEmployee={() => handleStartNewEmployee(i)}
+                onCancelNewEmployee={handleCancelNewEmployee}
+                onNewEmployeeSave={(data) => handleNewEmployeeSave(i, data)}
+              />
+            ))}
 
           {/* Separator */}
           {reviewData.devices.some(d => !["computer","desktop","laptop","server","aio","tablet"].includes((d.parsed.deviceType as string) || "")) && (
@@ -344,7 +622,19 @@ export default function SubmissionReviewPage({ params }: { params: Promise<{ id:
           {reviewData.devices
             .map((d, i) => ({ d, i }))
             .filter(({ d }) => !["computer","desktop","laptop","server","aio","tablet"].includes((d.parsed.deviceType as string) || ""))
-            .map(({ d, i }) => <DeviceRow key={i} device={d} index={i} checked={selected.has(i)} onToggle={() => toggleDevice(i)} />)}
+            .map(({ d, i }) => (
+              <DeviceRow
+                key={i} device={d} index={i} checked={selected.has(i)} onToggle={() => toggleDevice(i)}
+                employees={employees}
+                assignedEmployeeId={assignments[i] ?? null}
+                newEmployeeInfo={newEmployees[i] ? { firstName: newEmployees[i].firstName } : null}
+                showNewForm={showNewFormFor === i}
+                onAssignmentChange={(empId) => handleAssignmentChange(i, empId)}
+                onStartNewEmployee={() => handleStartNewEmployee(i)}
+                onCancelNewEmployee={handleCancelNewEmployee}
+                onNewEmployeeSave={(data) => handleNewEmployeeSave(i, data)}
+              />
+            ))}
         </div>
       )}
 
@@ -354,13 +644,17 @@ export default function SubmissionReviewPage({ params }: { params: Promise<{ id:
           <AlertTriangle size={14} className="text-amber-500 mt-0.5 shrink-0" />
           <div className="text-xs text-amber-800">
             <strong>{reviewData.pendingParents} thiết bị</strong> có thể chưa được gán đúng máy tính cha (parent).
+            Kiểm tra kỹ trước khi xác nhận.
           </div>
         </div>
       )}
 
       {/* Bottom */}
       <div className="mt-4 flex items-center justify-between">
-        <span className="text-xs text-gray-400">{selected.size} / {reviewData?.devices.length || 0} thiết bị chọn</span>
+        <span className="text-xs text-gray-400">
+          {selected.size} / {reviewData?.devices.length || 0} thiết bị chọn
+          {assignedCount > 0 && <> · {assignedCount} đã gán</>}
+        </span>
         <button onClick={handleApprove} disabled={selected.size === 0 || submitting}
           className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-purple-600 text-white text-xs font-medium hover:bg-purple-700 disabled:opacity-50 transition">
           {submitting ? "Đang xử lý..." : `Xác nhận ${selected.size} thiết bị`}

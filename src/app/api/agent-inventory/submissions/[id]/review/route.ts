@@ -7,6 +7,17 @@ const ReviewSchema = z.object({
   action: z.enum(["approve", "reject"]),
   /** Device IDs trong reviewData.devices[].parsed.deviceId */
   selectedDevices: z.array(z.string()).optional(),
+  /** Gán người dùng cho từng device: { deviceId: employeeId | null } */
+  assignments: z.record(z.string(), z.string().nullable()).optional(),
+  /** Nhân viên mới cần tạo: { deviceId: { firstName, lastName, email, ... } } */
+  newEmployees: z.record(z.string(), z.object({
+    firstName: z.string().optional(),
+    lastName: z.string().optional(),
+    email: z.string().optional(),
+    phone: z.string().optional(),
+    position: z.string().optional(),
+    department: z.string().optional(),
+  })).optional(),
 });
 
 export async function POST(
@@ -25,7 +36,7 @@ export async function POST(
     return NextResponse.json({ error: result.error.message, code: "VALIDATION_ERROR" }, { status: 400 });
   }
 
-  const { action, selectedDevices } = result.data;
+  const { action, selectedDevices, assignments, newEmployees } = result.data;
 
   const submission = await prisma.inventorySubmission.findUnique({ where: { id } });
   if (!submission) {
@@ -50,6 +61,25 @@ export async function POST(
   );
   const devicesToConfirm = selectedDevices && selectedDevices.length > 0 ? selectedDevices : allDeviceIds;
 
+  // Tạo nhân viên mới trước (nếu có)
+  const newEmployeeIds: Record<string, string> = {};
+  if (newEmployees) {
+    for (const [deviceId, empData] of Object.entries(newEmployees)) {
+      const emp = await prisma.customerEmployee.create({
+        data: {
+          customerId: submission.customerId,
+          firstName: empData.firstName || "",
+          lastName: empData.lastName || "",
+          email: empData.email || null,
+          phone: empData.phone || null,
+          position: empData.position || null,
+          department: empData.department || null,
+        },
+      });
+      newEmployeeIds[deviceId] = emp.id;
+    }
+  }
+
   let confirmedCount = 0;
   for (const deviceId of devicesToConfirm) {
     const devData = reviewData.devices.find(
@@ -71,8 +101,18 @@ export async function POST(
     const os = (d.os as string) || null;
     const notes = (d.notes as string) || null;
     const componentsJson = (d.componentsJson as string) || null;
+    const parentDeviceId = (d.parentDeviceId as string) || null;
     const hostnameNote = name ? `Hostname: ${name}` : "";
     const mergedNotes = [hostnameNote, notes].filter(Boolean).join("\n");
+
+    // Xác định assignedToId: từ assignments hoặc newEmployees
+    let assignedToId: string | null = null;
+    if (assignments && assignments[deviceId] !== undefined) {
+      assignedToId = assignments[deviceId];
+    }
+    if (newEmployeeIds[deviceId]) {
+      assignedToId = newEmployeeIds[deviceId];
+    }
 
     if (devData.match.found && devData.match.existingDeviceId) {
       // UPDATE existing device
@@ -97,6 +137,8 @@ export async function POST(
             submissionId: submission.id,
             source: "agent",
             collectedAt: new Date(),
+            // Cập nhật assignedTo nếu được chỉ định
+            ...(assignedToId !== null ? { assignedToId } : {}),
           },
         });
       }
@@ -121,6 +163,8 @@ export async function POST(
           source: "agent",
           status: "active",
           collectedAt: new Date(),
+          ...(assignedToId ? { assignedToId } : {}),
+          ...(parentDeviceId ? { parentDeviceId } : {}),
         },
       });
     }
