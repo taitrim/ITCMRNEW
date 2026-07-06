@@ -517,6 +517,15 @@ export default function SubmissionReviewPage({ params }: { params: Promise<{ id:
     });
   }, []);
 
+  const toggleAll = useCallback(() => {
+    if (!reviewData) return;
+    if (selected.size === reviewData.devices.length) {
+      setSelected(new Set());
+    } else {
+      setSelected(new Set(reviewData.devices.map((_: any, i: number) => i)));
+    }
+  }, [reviewData, selected]);
+
   const stats = useMemo(() => {
     if (!reviewData) return { total: 0, matched: 0, new: 0 };
     const total = reviewData.devices.length;
@@ -612,13 +621,13 @@ export default function SubmissionReviewPage({ params }: { params: Promise<{ id:
   if (loading) return <div className="flex items-center justify-center min-h-[50vh]"><div className="text-sm text-gray-400">Đang tải...</div></div>;
 
   if (error && !submission) return (
-    <div className="max-w-3xl mx-auto p-6">
+    <div className="max-w-lg mx-auto px-4 py-10">
       <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>
     </div>
   );
 
   if (result) return (
-    <div className="max-w-3xl mx-auto p-6">
+    <div className="max-w-lg mx-auto px-4 py-10">
       <div className="rounded-lg border border-green-200 bg-green-50 p-6 text-center">
         <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-3">
           {result.status === "approved" ? <Check size={24} className="text-green-600" /> : <X size={24} className="text-red-500" />}
@@ -644,25 +653,26 @@ export default function SubmissionReviewPage({ params }: { params: Promise<{ id:
   );
 
   return (
-    <div className="max-w-3xl mx-auto p-6">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
       {/* Header */}
-      <div className="mb-4">
+      <div className="mb-6">
         <button onClick={() => router.back()}
           className="inline-flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600 transition mb-2">
           <ArrowLeft size={12} /> Quay lại
         </button>
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
           <div>
             <h1 className="text-lg font-semibold text-gray-900">Duyệt thiết bị từ Agent</h1>
             <p className="text-xs text-gray-400 mt-0.5">
               {submission?.customerName && <>Khách hàng: <strong>{submission.customerName}</strong> · </>}
               {reviewData && <>{reviewData.devices.length} thiết bị</>}
+              {submission && <>(gửi lúc {new Date(submission.createdAt).toLocaleString("vi-VN")})</>}
             </p>
           </div>
-          <div className="flex items-center gap-2 text-xs">
-            <span className="text-green-600">Mới: <strong>{stats.new}</strong></span>
+          <div className="flex items-center gap-3 text-xs bg-gray-50 rounded-lg px-3 py-2">
+            <span className="text-green-600">Mới: <strong className="text-sm">{stats.new}</strong></span>
             <span className="text-gray-300">|</span>
-            <span className="text-amber-600">Đã có: <strong>{stats.matched}</strong></span>
+            <span className="text-amber-600">Đã có: <strong className="text-sm">{stats.matched}</strong></span>
           </div>
         </div>
       </div>
@@ -670,11 +680,19 @@ export default function SubmissionReviewPage({ params }: { params: Promise<{ id:
       {error && <div className="mb-3 rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">{error}</div>}
 
       {/* Controls */}
-      <div className="flex items-center justify-between mb-3">
-        <span className="text-xs text-gray-400">
-          ({selected.size}/{reviewData?.devices.length || 0} đã chọn
-          {assignedCount > 0 && <> · {assignedCount} đã gán</>})
-        </span>
+      <div className="flex items-center justify-between mb-4 bg-white rounded-xl border border-gray-200 px-4 py-3">
+        <div className="flex items-center gap-3 text-xs">
+          <label className="flex items-center gap-1.5 cursor-pointer">
+            <input type="checkbox" checked={selected.size === reviewData?.devices.length}
+              onChange={toggleAll}
+              className="w-3.5 h-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+            Chọn tất cả
+          </label>
+          <span className="text-gray-400">
+            ({selected.size}/{reviewData?.devices.length || 0} đã chọn
+            {assignedCount > 0 && <> · {assignedCount} đã gán</>})
+          </span>
+        </div>
         <div className="flex items-center gap-2">
           <button onClick={handleReject} disabled={submitting}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-red-200 text-red-600 text-xs font-medium hover:bg-red-50 transition disabled:opacity-50">
@@ -687,53 +705,62 @@ export default function SubmissionReviewPage({ params }: { params: Promise<{ id:
         </div>
       </div>
 
-      {/* Device list */}
+      {/* Device list - responsive grid */}
       {reviewData && (
-        <div className="space-y-2">
-          {/* Computers first */}
-          {reviewData.devices
-            .map((d, i) => ({ d, i }))
-            .filter(({ d }) => ["computer","desktop","laptop","server","aio","tablet"].includes((d.parsed.deviceType as string) || ""))
-            .map(({ d, i }) => (
-              <DeviceRow
-                key={i} device={d} index={i} checked={selected.has(i)} onToggle={() => toggleDevice(i)}
-                employees={employees}
-                assignedEmployeeId={assignments[i] ?? null}
-                onAssignmentChange={(empId) => handleAssignmentChange(i, empId)}
-                onAddEmployee={() => handleOpenAddEmployee(i)}
-              />
-            ))}
-
-          {/* Separator */}
-          {reviewData.devices.some(d => !["computer","desktop","laptop","server","aio","tablet"].includes((d.parsed.deviceType as string) || "")) && (
-            <div className="pt-2 pb-1">
-              <div className="flex items-center gap-2">
-                <div className="h-px flex-1 bg-gray-100" />
-                <span className="text-[10px] text-gray-300 font-medium tracking-wider uppercase">Thiết bị khác</span>
-                <div className="h-px flex-1 bg-gray-100" />
-              </div>
+        <div>
+          {/* Computers - section label */}
+          {reviewData.devices.some(d => ["computer","desktop","laptop","server","aio","tablet"].includes((d.parsed.deviceType as string) || "")) && (
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-1 h-4 rounded bg-blue-500" />
+              <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Máy tính</span>
+              <div className="h-px flex-1 bg-gray-100" />
             </div>
           )}
 
-          {/* Non-computer */}
-          {reviewData.devices
-            .map((d, i) => ({ d, i }))
-            .filter(({ d }) => !["computer","desktop","laptop","server","aio","tablet"].includes((d.parsed.deviceType as string) || ""))
-            .map(({ d, i }) => (
-              <DeviceRow
-                key={i} device={d} index={i} checked={selected.has(i)} onToggle={() => toggleDevice(i)}
-                employees={employees}
-                assignedEmployeeId={null}
-                onAssignmentChange={() => {}}
-                onAddEmployee={() => {}} // non-computer không gán
-              />
-            ))}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-4">
+            {reviewData.devices
+              .map((d, i) => ({ d, i }))
+              .filter(({ d }) => ["computer","desktop","laptop","server","aio","tablet"].includes((d.parsed.deviceType as string) || ""))
+              .map(({ d, i }) => (
+                <DeviceRow
+                  key={i} device={d} index={i} checked={selected.has(i)} onToggle={() => toggleDevice(i)}
+                  employees={employees}
+                  assignedEmployeeId={assignments[i] ?? null}
+                  onAssignmentChange={(empId) => handleAssignmentChange(i, empId)}
+                  onAddEmployee={() => handleOpenAddEmployee(i)}
+                />
+              ))}
+          </div>
+
+          {/* Non-computer - section label */}
+          {reviewData.devices.some(d => !["computer","desktop","laptop","server","aio","tablet"].includes((d.parsed.deviceType as string) || "")) && (
+            <div className="flex items-center gap-2 mb-3 mt-2">
+              <div className="w-1 h-4 rounded bg-amber-500" />
+              <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Thiết bị khác</span>
+              <div className="h-px flex-1 bg-gray-100" />
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+            {reviewData.devices
+              .map((d, i) => ({ d, i }))
+              .filter(({ d }) => !["computer","desktop","laptop","server","aio","tablet"].includes((d.parsed.deviceType as string) || ""))
+              .map(({ d, i }) => (
+                <DeviceRow
+                  key={i} device={d} index={i} checked={selected.has(i)} onToggle={() => toggleDevice(i)}
+                  employees={employees}
+                  assignedEmployeeId={null}
+                  onAssignmentChange={() => {}}
+                  onAddEmployee={() => {}} // non-computer không gán
+                />
+              ))}
+          </div>
         </div>
       )}
 
       {/* Pending parents warning */}
       {reviewData && reviewData.pendingParents > 0 && (
-        <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 flex items-start gap-2">
+        <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 flex items-start gap-2">
           <AlertTriangle size={14} className="text-amber-500 mt-0.5 shrink-0" />
           <div className="text-xs text-amber-800">
             <strong>{reviewData.pendingParents} thiết bị</strong> có thể chưa được gán đúng máy tính cha (parent).
@@ -742,14 +769,17 @@ export default function SubmissionReviewPage({ params }: { params: Promise<{ id:
         </div>
       )}
 
-      {/* Bottom */}
-      <div className="mt-4 flex items-center justify-between">
-        <span className="text-xs text-gray-400">
-          {selected.size} / {reviewData?.devices.length || 0} thiết bị chọn
-          {assignedCount > 0 && <> · {assignedCount} đã gán</>}
-        </span>
+      {/* Bottom bar */}
+      <div className="mt-4 bg-white rounded-xl border border-gray-200 px-4 py-3 flex items-center justify-between">
+        <div className="flex items-center gap-4 text-xs text-gray-400">
+          <span><strong className="text-gray-600">{selected.size}</strong> / {reviewData?.devices.length || 0} thiết bị chọn</span>
+          {assignedCount > 0 && <span><strong className="text-gray-600">{assignedCount}</strong> đã gán</span>}
+          {reviewData && reviewData.devices.length > 0 && (
+            <span>Trang duyệt <strong className="text-gray-600">1</strong></span>
+          )}
+        </div>
         <button onClick={handleApprove} disabled={selected.size === 0 || submitting}
-          className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-purple-600 text-white text-xs font-medium hover:bg-purple-700 disabled:opacity-50 transition">
+          className="inline-flex items-center gap-1.5 px-5 py-2 rounded-lg bg-purple-600 text-white text-sm font-medium hover:bg-purple-700 disabled:opacity-50 transition shadow-sm">
           {submitting ? "Đang xử lý..." : `Xác nhận ${selected.size} thiết bị`}
         </button>
       </div>
