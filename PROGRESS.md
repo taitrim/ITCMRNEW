@@ -1,8 +1,8 @@
 # Progress Tracker
 
-**Active phase:** `ITSM-P01` — ITSM core features (✅ done)
-**Last update:** 2026-06-14 by setup script
-**Last commit:** _none yet_
+**Active phase:** `ITSM-P04` — Agent flow improvements (✅ done)
+**Last update:** 2026-07-06
+**Last commit:** _9679586_
 **Plan reference:** `AUDIT_AND_ROADMAP.md` (if exists) OR project README roadmap section.
 **Model strategy:** see `AGENTS.md` → "Model & Tool Selection per Task" and `CLAUDE.md` §22. Every phase below MUST carry an explicit `Model:` line.
 
@@ -305,3 +305,29 @@ Every Friday:
 - `inventory-matching.ts` shortened from 327 → 210 lines
 - ~2100 LOC of dead code removed
 - Build still clean, all E2E still pass
+
+### ✅ ITSM-P04 — Agent flow improvements (dedup, history, pagination, layout)
+
+**Status:** done
+**Started:** 2026-07-06
+**Completed:** 2026-07-06
+**Commits:** `cc80b83` → `9679586`
+**Model:** Sonnet
+
+**Plan for this phase:**
+- [x] Dedup: submit route filter known devices → auto-update, only truly new devices need review
+- [x] Customer detail: hiển thị lịch sử thu thập agent (submission date, devices, status)
+- [x] Pagination: agent-updates list page + API
+- [x] Asset code: auto-generate KH-&lt;code&gt;-&lt;type&gt;-&lt;num&gt; khi tạo device
+- [x] Redesign review page: layout rộng hơn, đầy đặn hơn trên màn hình lớn
+
+**Delivered:**
+- Dedup: submit route auto-updates existing devices, only new devices create pending submissions
+- Submission history: Agent tab hiển thị lịch sử thu thập (thời gian, status, device count)
+- Pagination: submissions API hỗ trợ page/pageSize, list page có nút phân trang + stats
+- Asset code: tự động tạo `KH-&lt;code&gt;-&lt;type&gt;-&lt;NNN&gt;` khi duyệt tạo thiết bị mới
+- Review page: layout `max-w-7xl`, responsive 2-column grid, section labels, select-all, bottom bar
+
+**Verified:**
+- `tsc --noEmit` — 0 errors (trừ pre-existing DeviceComponentsPanel TS2339)
+- `npx playwright test` — 5/5 passed
