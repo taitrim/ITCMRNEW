@@ -4,7 +4,7 @@ import { useState, useCallback, useEffect } from "react";
 import Link from "next/link";
 import {
   Monitor, Clock, CheckCircle, XCircle, AlertTriangle,
-  ChevronRight, Eye, RefreshCw, Download
+  ChevronRight, ChevronLeft, Eye, RefreshCw, Download
 } from "lucide-react";
 
 /* ===== Types ===== */
@@ -24,43 +24,44 @@ const statusCfg: Record<string, { label: string; color: string; bg: string }> = 
   rejected: { label: "Từ chối", color: "text-red-700", bg: "bg-red-100" },
 };
 
+const PAGE_SIZE = 20;
+
 /* ===== Page ===== */
 export default function AgentUpdatesPage() {
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<string>("all");
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [stats, setStats] = useState({ total: 0, pending: 0, approved: 0, rejected: 0 });
 
   const loadSubmissions = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/agent-inventory/submissions");
+      const params = new URLSearchParams({ page: String(page), pageSize: String(PAGE_SIZE) });
+      if (filter !== "all") params.set("status", filter);
+      const res = await fetch(`/api/agent-inventory/submissions?${params}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = await res.json();
       setSubmissions(json.data || []);
+      setTotalPages(json.meta?.totalPages || 1);
+      setTotal(json.meta?.total || 0);
+      if (json.stats) setStats(json.stats);
     } catch (e: any) {
       setError(e.message);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [page, filter]);
 
-  useEffect(() => { loadSubmissions(); }, []);
+  useEffect(() => { loadSubmissions(); }, [loadSubmissions]);
 
-  // Filter
-  const filtered = submissions.filter(s => {
-    if (filter === "all") return true;
-    return s.status === filter;
-  });
-
-  // Stats
-  const stats = {
-    total: submissions.length,
-    pending: submissions.filter(s => s.status === "pending").length,
-    approved: submissions.filter(s => s.status === "approved").length,
-    rejected: submissions.filter(s => s.status === "rejected").length,
-    totalDevices: submissions.reduce((sum, s) => sum + s.deviceCount, 0),
+  const handleFilterChange = (newFilter: string) => {
+    setFilter(newFilter);
+    setPage(1);
   };
 
   return (
@@ -73,21 +74,21 @@ export default function AgentUpdatesPage() {
         </p>
       </div>
 
-      {/* Stats bar */}
-      <div className="flex items-center gap-3 mb-4 text-xs">
-        <button onClick={() => setFilter("all")}
+      {/* Stats bar + filters */}
+      <div className="flex items-center gap-2 mb-4 text-xs flex-wrap">
+        <button onClick={() => handleFilterChange("all")}
           className={`px-3 py-1.5 rounded-lg transition ${filter === "all" ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}>
           Tất cả <span className="font-medium ml-1">{stats.total}</span>
         </button>
-        <button onClick={() => setFilter("pending")}
+        <button onClick={() => handleFilterChange("pending")}
           className={`px-3 py-1.5 rounded-lg transition ${filter === "pending" ? "bg-purple-600 text-white" : "bg-purple-50 text-purple-600 hover:bg-purple-100"}`}>
           Chờ duyệt <span className="font-medium ml-1">{stats.pending}</span>
         </button>
-        <button onClick={() => setFilter("approved")}
+        <button onClick={() => handleFilterChange("approved")}
           className={`px-3 py-1.5 rounded-lg transition ${filter === "approved" ? "bg-green-600 text-white" : "bg-green-50 text-green-600 hover:bg-green-100"}`}>
           Đã duyệt <span className="font-medium ml-1">{stats.approved}</span>
         </button>
-        <button onClick={() => setFilter("rejected")}
+        <button onClick={() => handleFilterChange("rejected")}
           className={`px-3 py-1.5 rounded-lg transition ${filter === "rejected" ? "bg-red-600 text-white" : "bg-red-50 text-red-600 hover:bg-red-100"}`}>
           Từ chối <span className="font-medium ml-1">{stats.rejected}</span>
         </button>
@@ -109,7 +110,7 @@ export default function AgentUpdatesPage() {
       )}
 
       {/* Empty */}
-      {!loading && filtered.length === 0 && (
+      {!loading && submissions.length === 0 && (
         <div className="text-center py-12 text-xs text-gray-400">
           {filter === "all"
             ? "Chưa có dữ liệu Agent nào. Tải script Agent từ trang chi tiết khách hàng."
@@ -118,57 +119,110 @@ export default function AgentUpdatesPage() {
       )}
 
       {/* Submissions list */}
-      {!loading && filtered.length > 0 && (
-        <div className="space-y-1.5">
-          {filtered.map(s => {
-            const cfg = statusCfg[s.status] || statusCfg.pending;
+      {!loading && submissions.length > 0 && (
+        <>
+          <div className="space-y-1.5">
+            {submissions.map(s => {
+              const cfg = statusCfg[s.status] || statusCfg.pending;
 
-            return (
-              <Link
-                key={s.id}
-                href={s.status === "pending" ? `/agent-updates/${s.id}` : `/customers/${s.customerId}`}
-                className="flex items-center gap-3 px-4 py-3 rounded-lg border border-gray-200 bg-white hover:border-gray-300 transition group"
-              >
-                {/* Icon */}
-                <div className={`w-8 h-8 rounded-lg ${cfg.bg} flex items-center justify-center shrink-0`}>
-                  <Monitor size={15} className={cfg.color} />
-                </div>
+              return (
+                <Link
+                  key={s.id}
+                  href={s.status === "pending" ? `/agent-updates/${s.id}` : `/customers/${s.customerId}`}
+                  className="flex items-center gap-3 px-4 py-3 rounded-lg border border-gray-200 bg-white hover:border-gray-300 transition group"
+                >
+                  {/* Icon */}
+                  <div className={`w-8 h-8 rounded-lg ${cfg.bg} flex items-center justify-center shrink-0`}>
+                    <Monitor size={15} className={cfg.color} />
+                  </div>
 
-                {/* Info */}
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[13px] font-medium text-gray-900 truncate">
-                      {s.customerName || "Đã xóa"}
-                    </span>
-                    <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium ${cfg.color} ${cfg.bg}`}>
-                      {cfg.label}
-                    </span>
-                    {s.deviceCount > 0 && (
-                      <span className="text-[10px] text-gray-400">
-                        {s.deviceCount} thiết bị
+                  {/* Info */}
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[13px] font-medium text-gray-900 truncate">
+                        {s.customerName || "Đã xóa"}
                       </span>
+                      <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium ${cfg.color} ${cfg.bg}`}>
+                        {cfg.label}
+                      </span>
+                      {s.deviceCount > 0 && (
+                        <span className="text-[10px] text-gray-400">
+                          {s.deviceCount} thiết bị
+                        </span>
+                      )}
+                      {s.deviceCount === 0 && s.status === "approved" && (
+                        <span className="text-[10px] text-blue-500">Tự động</span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 mt-0.5 text-[10px] text-gray-400">
+                      <span>{new Date(s.createdAt).toLocaleDateString("vi-VN")}</span>
+                    </div>
+                  </div>
+
+                  {/* Action */}
+                  <div className="shrink-0 flex items-center gap-2">
+                    {s.status === "pending" ? (
+                      <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-purple-600 text-white text-[11px] font-medium group-hover:bg-purple-700 transition">
+                        <Eye size={12} />
+                        Xem & duyệt
+                      </span>
+                    ) : (
+                      <ChevronRight size={14} className="text-gray-300 group-hover:text-gray-500 transition" />
                     )}
                   </div>
-                  <div className="flex items-center gap-2 mt-0.5 text-[10px] text-gray-400">
-                    <span>{new Date(s.createdAt).toLocaleDateString("vi-VN")}</span>
-                  </div>
-                </div>
+                </Link>
+              );
+            })}
+          </div>
 
-                {/* Action */}
-                <div className="shrink-0 flex items-center gap-2">
-                  {s.status === "pending" ? (
-                    <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-purple-600 text-white text-[11px] font-medium group-hover:bg-purple-700 transition">
-                      <Eye size={12} />
-                      Xem & duyệt
-                    </span>
-                  ) : (
-                    <ChevronRight size={14} className="text-gray-300 group-hover:text-gray-500 transition" />
-                  )}
-                </div>
-              </Link>
-            );
-          })}
-        </div>
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-center gap-2 mt-4">
+              <button
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={page <= 1}
+                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed transition"
+              >
+                <ChevronLeft size={13} /> Trước
+              </button>
+
+              {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
+                // Show pages around current
+                let pageNum: number;
+                if (totalPages <= 7) {
+                  pageNum = i + 1;
+                } else if (page <= 4) {
+                  pageNum = i + 1;
+                } else if (page >= totalPages - 3) {
+                  pageNum = totalPages - 6 + i;
+                } else {
+                  pageNum = page - 3 + i;
+                }
+                return (
+                  <button
+                    key={pageNum}
+                    onClick={() => setPage(pageNum)}
+                    className={`w-7 h-7 rounded-lg text-xs font-medium transition ${
+                      page === pageNum
+                        ? "bg-gray-900 text-white"
+                        : "text-gray-500 hover:bg-gray-100"
+                    }`}
+                  >
+                    {pageNum}
+                  </button>
+                );
+              })}
+
+              <button
+                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                disabled={page >= totalPages}
+                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed transition"
+              >
+                Sau <ChevronRight size={13} />
+              </button>
+            </div>
+          )}
+        </>
       )}
 
       {/* Instructions */}
