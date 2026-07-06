@@ -6,7 +6,7 @@ import {
   ArrowLeft, Check, X, AlertTriangle, Monitor, Printer, HelpCircle,
   ChevronDown, ChevronRight, UserPlus, Users,
   User, Briefcase, GraduationCap, AtSign, Phone,
-  Plus, Laptop, Server, RefreshCw,
+  Plus, Laptop, Server, RefreshCw, Search,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -337,6 +337,14 @@ export default function SubmissionReviewPage({ params }: { params: Promise<{ id:
 
       if (rd?.devices) {
         setSelected(new Set(rd.devices.map((_: any, i: number) => i)));
+        // Pre-select existing assigned employee for update-matched devices
+        const initAssign: Record<number, string | null> = {};
+        rd.devices.forEach((d: any, i: number) => {
+          if (d.match?.found && d.match?.existingDevice?.assignedToId) {
+            initAssign[i] = d.match.existingDevice.assignedToId as string;
+          }
+        });
+        setAssignments(initAssign);
       }
     } catch (e: any) {
       setError(e.message);
@@ -400,10 +408,19 @@ export default function SubmissionReviewPage({ params }: { params: Promise<{ id:
       const selectedIds = Array.from(selected).map(i =>
         String(reviewData.devices[i]?.parsed?.deviceId || `${reviewData.devices[i]?.parsed?.name}_${i}`)
       );
+      // Convert index-based assignments to deviceId-based for API
+      const deviceAssignments: Record<string, string | null> = {};
+      for (const [idx, empId] of Object.entries(assignments)) {
+        const dev = reviewData.devices[Number(idx)];
+        if (dev) {
+          const devId = String(dev.parsed?.deviceId || `${dev.parsed?.name}_${idx}`);
+          deviceAssignments[devId] = empId;
+        }
+      }
       const res = await fetch(`/api/agent-inventory/submissions/${id}/review`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "approve", selectedDevices: selectedIds, assignments }),
+        body: JSON.stringify({ action: "approve", selectedDevices: selectedIds, assignments: deviceAssignments }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Lỗi");

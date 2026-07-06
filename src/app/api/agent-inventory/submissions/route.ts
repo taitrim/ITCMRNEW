@@ -18,6 +18,13 @@ export async function GET(req: NextRequest) {
   if (customerId) where.customerId = customerId;
   if (status) where.status = status;
 
+  // Device type distribution from all confirmed devices
+  const deviceTypes = await prisma.customerCollectedDevice.groupBy({
+    by: ["deviceType"],
+    _count: { deviceType: true },
+    orderBy: { _count: { deviceType: "desc" } },
+  });
+
   const [submissions, total, statusCounts] = await Promise.all([
     prisma.inventorySubmission.findMany({
       where,
@@ -61,5 +68,6 @@ export async function GET(req: NextRequest) {
       approved: statusCounts[2],
       rejected: statusCounts[3],
     },
+    deviceTypes: deviceTypes.map(dt => ({ type: dt.deviceType, count: dt._count.deviceType })),
   });
 }

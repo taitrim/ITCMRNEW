@@ -8,10 +8,12 @@ import {
   FileText, Activity, Server, Laptop, Printer,
   Users, Building2, Calendar, ArrowRight,
   Wifi, Database, Cpu, Box, MoreHorizontal,
+  PieChart,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { PieChart as RePieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 
 /* ===== Types ===== */
 type Submission = {
@@ -21,9 +23,10 @@ type Submission = {
   status: string;
   deviceCount: number;
   createdAt: string;
+  devices?: { id: string; deviceType: string; manufacturer?: string; modelName?: string; serialNumber?: string }[];
 };
 
-const PAGE_SIZE = 15;
+const PAGE_SIZE = 12;
 
 /* ===== Helpers ===== */
 const statusConfig: Record<string, { label: string; badge: "warning" | "success" | "danger" }> = {
@@ -50,6 +53,18 @@ function customerInitials(name: string): string {
   return (name[0] || "?").toUpperCase();
 }
 
+const DEVICE_TYPE_COLORS: Record<string, string> = {
+  computer: "#3b82f6", laptop: "#8b5cf6", server: "#f97316",
+  printer: "#22c55e", monitor: "#06b6d4", network: "#eab308",
+  peripheral: "#ec4899", other: "#9ca3af",
+};
+
+const DEVICE_TYPE_LABELS: Record<string, string> = {
+  computer: "PC", laptop: "Laptop", server: "Server",
+  printer: "Máy in", monitor: "Màn hình", network: "Mạng",
+  peripheral: "Ngoại vi", other: "Khác",
+};
+
 const deviceTypeIcons: Record<string, any> = {
   computer: Monitor, desktop: Monitor, laptop: Laptop, server: Server,
   printer: Printer, network: Wifi, peripheral: Box,
@@ -65,6 +80,7 @@ export default function AgentUpdatesPage() {
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
   const [stats, setStats] = useState({ total: 0, pending: 0, approved: 0, rejected: 0 });
+  const [deviceTypes, setDeviceTypes] = useState<{ type: string; count: number }[]>([]);
 
   const loadSubmissions = useCallback(async () => {
     setLoading(true);
@@ -79,6 +95,7 @@ export default function AgentUpdatesPage() {
       setTotalPages(json.meta?.totalPages || 1);
       setTotal(json.meta?.total || 0);
       if (json.stats) setStats(json.stats);
+      if (json.deviceTypes) setDeviceTypes(json.deviceTypes);
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -98,12 +115,12 @@ export default function AgentUpdatesPage() {
   return (
     <div className="min-h-screen bg-surface-secondary/30 pb-6">
 
-      {/* ═══ Top Banner / Header ═══ */}
-      <div className="bg-white border-b border-border px-4 sm:px-6 py-4">
-        <div className="max-w-6xl mx-auto">
+      {/* ═══ Header ═══ */}
+      <div className="bg-white border-b border-border px-4 sm:px-6 lg:px-8 py-4">
+        <div className="max-w-full mx-auto">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500 to-teal-500 flex items-center justify-center shadow-sm">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500 to-teal-500 flex items-center justify-center shadow-xs">
                 <Activity size={20} className="text-white" />
               </div>
               <div>
@@ -120,15 +137,15 @@ export default function AgentUpdatesPage() {
         </div>
       </div>
 
-      <div className="max-w-6xl mx-auto px-4 sm:px-6">
+      <div className="max-w-full px-4 sm:px-6 lg:px-8">
 
         {/* ═══ KPI Cards ═══ */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-4">
           {[
-            { label: "Tổng đợt", value: stats.total, icon: Database, color: "text-slate-600", bg: "bg-slate-50", accent: "border-l-slate-400" },
-            { label: "Chờ duyệt", value: stats.pending, icon: Clock, color: "text-amber-600", bg: "bg-amber-50", accent: "border-l-amber-400" },
-            { label: "Đã duyệt", value: stats.approved, icon: CheckCircle, color: "text-emerald-600", bg: "bg-emerald-50", accent: "border-l-emerald-400" },
-            { label: "Từ chối", value: stats.rejected, icon: XCircle, color: "text-red-600", bg: "bg-red-50", accent: "border-l-red-400" },
+            { label: "Tổng đợt", value: stats.total, icon: Database, color: "text-slate-600", bg: "bg-slate-50" },
+            { label: "Chờ duyệt", value: stats.pending, icon: Clock, color: "text-amber-600", bg: "bg-amber-50" },
+            { label: "Đã duyệt", value: stats.approved, icon: CheckCircle, color: "text-emerald-600", bg: "bg-emerald-50" },
+            { label: "Từ chối", value: stats.rejected, icon: XCircle, color: "text-red-600", bg: "bg-red-50" },
           ].map(k => (
             <Card key={k.label}>
               <CardContent className="flex items-center gap-3 py-3.5">
@@ -144,11 +161,11 @@ export default function AgentUpdatesPage() {
           ))}
         </div>
 
-        {/* ═══ Main content: 2-column layout ═══ */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-4">
+        {/* ═══ Main content: 2-column layout (left: pending feed + guide, right: chart) ═══ */}
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 mt-4">
 
-          {/* ── Left: Pending submissions (feed-style) ── */}
-          <div className="lg:col-span-2 space-y-3">
+          {/* ── Left (3/4): Pending submissions + Guide ── */}
+          <div className="lg:col-span-3 space-y-3">
             <Card>
               <CardHeader>
                 <div className="flex items-center gap-2">
@@ -198,10 +215,10 @@ export default function AgentUpdatesPage() {
               </CardContent>
             </Card>
 
-            {/* ── Guide / Quick start ── */}
+            {/* Guide */}
             <Card>
               <CardContent className="flex items-start gap-4 py-4">
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500 to-teal-500 flex items-center justify-center shrink-0 shadow-sm">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500 to-teal-500 flex items-center justify-center shrink-0 shadow-xs">
                   <Download size={18} className="text-white" />
                 </div>
                 <div className="flex-1 min-w-0">
@@ -215,34 +232,46 @@ export default function AgentUpdatesPage() {
             </Card>
           </div>
 
-          {/* ── Right: Overview widget ── */}
+          {/* ── Right (1/4): Device type chart ── */}
           <div className="space-y-3">
-            {/* Status breakdown */}
             <Card>
               <CardHeader>
                 <div className="flex items-center gap-2">
-                  <Activity size={15} className="text-slate-500" />
-                  <CardTitle>Tổng quan</CardTitle>
+                  <PieChart size={15} className="text-slate-500" />
+                  <CardTitle>Thiết bị</CardTitle>
                 </div>
               </CardHeader>
-              <CardContent className="px-4 py-3 space-y-3">
-                <div className="space-y-2">
-                  {[
-                    { label: "Chờ duyệt", value: stats.pending, pct: stats.total ? Math.round(stats.pending / stats.total * 100) : 0, color: "bg-amber-500" },
-                    { label: "Đã duyệt", value: stats.approved, pct: stats.total ? Math.round(stats.approved / stats.total * 100) : 0, color: "bg-emerald-500" },
-                    { label: "Từ chối", value: stats.rejected, pct: stats.total ? Math.round(stats.rejected / stats.total * 100) : 0, color: "bg-red-500" },
-                  ].map(row => (
-                    <div key={row.label}>
-                      <div className="flex items-center justify-between text-xs mb-1">
-                        <span className="text-muted-foreground">{row.label}</span>
-                        <span className="font-semibold text-gray-700">{row.value}</span>
-                      </div>
-                      <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden">
-                        <div className={cn("h-full rounded-full transition-all duration-500", row.color)} style={{ width: `${row.pct}%` }} />
-                      </div>
+              <CardContent className="px-4 py-3">
+                {deviceTypes.length === 0 ? (
+                  <div className="text-xs text-muted-foreground text-center py-4">Chưa có dữ liệu</div>
+                ) : (
+                  <>
+                    <ResponsiveContainer width="100%" height={140}>
+                      <RePieChart>
+                        <Pie data={deviceTypes} dataKey="count" nameKey="type"
+                          cx="50%" cy="50%" outerRadius={52} innerRadius={26}>
+                          {deviceTypes.map((dt, i) => (
+                            <Cell key={i} fill={DEVICE_TYPE_COLORS[dt.type] || "#9ca3af"} />
+                          ))}
+                        </Pie>
+                        <Tooltip formatter={(v: any, _name: any) => [v, "SL"]}
+                          labelFormatter={(v: any) => DEVICE_TYPE_LABELS[v] || v} />
+                      </RePieChart>
+                    </ResponsiveContainer>
+                    <div className="space-y-1.5 mt-2">
+                      {deviceTypes.slice(0, 5).map(dt => {
+                        const Icon = deviceTypeIcons[dt.type] || Box;
+                        return (
+                          <div key={dt.type} className="flex items-center gap-2 text-[11px]">
+                            <Icon size={11} style={{ color: DEVICE_TYPE_COLORS[dt.type] || "#9ca3af" }} />
+                            <span className="text-gray-500 flex-1">{DEVICE_TYPE_LABELS[dt.type] || dt.type}</span>
+                            <span className="font-semibold text-gray-700">{dt.count}</span>
+                          </div>
+                        );
+                      })}
                     </div>
-                  ))}
-                </div>
+                  </>
+                )}
               </CardContent>
             </Card>
 
@@ -264,7 +293,7 @@ export default function AgentUpdatesPage() {
                     <p className="text-xs font-medium text-gray-700">Danh sách khách hàng</p>
                     <p className="text-[10px] text-muted-foreground">Chọn KH để tải Agent Script</p>
                   </div>
-                  <ChevronRight size={14} className="text-gray-300 group-hover:text-gray-500 transition-colors" />
+                  <ChevronRight size={14} className="text-gray-300 group-hover:text-gray-500" />
                 </Link>
                 <Link href="/agent-updates?filter=pending"
                   className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-gray-50 transition-colors group">
@@ -275,14 +304,14 @@ export default function AgentUpdatesPage() {
                     <p className="text-xs font-medium text-gray-700">Duyệt đợt thu thập</p>
                     <p className="text-[10px] text-muted-foreground">{stats.pending} đợt đang chờ</p>
                   </div>
-                  <ChevronRight size={14} className="text-gray-300 group-hover:text-gray-500 transition-colors" />
+                  <ChevronRight size={14} className="text-gray-300 group-hover:text-gray-500" />
                 </Link>
               </CardContent>
             </Card>
           </div>
         </div>
 
-        {/* ═══ Submissions list ═══ */}
+        {/* ═══ Submissions: 3-column grid ═══ */}
         <div className="mt-5">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
@@ -291,8 +320,6 @@ export default function AgentUpdatesPage() {
                 <span className="text-[10px] text-muted-foreground bg-gray-100 px-2 py-0.5 rounded-full">{total}</span>
               )}
             </div>
-
-            {/* Filter chips */}
             <div className="flex items-center gap-1">
               {[
                 { key: "all", label: "Tất cả" },
@@ -320,13 +347,15 @@ export default function AgentUpdatesPage() {
 
           {/* Loading */}
           {loading ? (
-            <div className="space-y-2">
-              {[1,2,3,4].map(i => (
-                <div key={i} className="h-16 bg-white rounded-xl border border-border animate-pulse flex items-center px-4">
-                  <div className="w-9 h-9 rounded-full bg-gray-100 mr-3" />
-                  <div className="flex-1 space-y-1.5">
-                    <div className="h-3 w-40 bg-gray-100 rounded" />
-                    <div className="h-2.5 w-24 bg-gray-50 rounded" />
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {[1,2,3,4,5,6].map(i => (
+                <div key={i} className="h-28 bg-white rounded-xl border border-border animate-pulse p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-gray-100" />
+                    <div className="flex-1 space-y-2">
+                      <div className="h-3 w-32 bg-gray-100 rounded" />
+                      <div className="h-2.5 w-20 bg-gray-50 rounded" />
+                    </div>
                   </div>
                 </div>
               ))}
@@ -341,9 +370,9 @@ export default function AgentUpdatesPage() {
             </Card>
           ) : (
             <>
-              <div className="space-y-1.5">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                 {submissions.map(s => (
-                  <SubmissionRow key={s.id} submission={s} />
+                  <HistoryCard key={s.id} submission={s} />
                 ))}
               </div>
 
@@ -387,7 +416,7 @@ export default function AgentUpdatesPage() {
   );
 }
 
-/* ═══ Feed Item (for pending section) ═══ */
+/* ═══ Feed Item ═══ */
 function FeedItem({ submission: s }: { submission: Submission }) {
   const cfg = statusConfig[s.status] || statusConfig.pending;
 
@@ -395,8 +424,7 @@ function FeedItem({ submission: s }: { submission: Submission }) {
     <Link href={`/agent-updates/${s.id}`}
       className="block bg-amber-50/40 border border-amber-100 rounded-xl p-3 hover:bg-amber-50/70 transition-colors group">
       <div className="flex items-start gap-3">
-        {/* Avatar */}
-        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center text-white text-xs font-bold shrink-0 shadow-sm">
+        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center text-white text-xs font-bold shrink-0 shadow-xs">
           {customerInitials(s.customerName || "??")}
         </div>
         <div className="flex-1 min-w-0">
@@ -420,57 +448,74 @@ function FeedItem({ submission: s }: { submission: Submission }) {
   );
 }
 
-/* ═══ Submission Row (for full list) ═══ */
-function SubmissionRow({ submission: s }: { submission: Submission }) {
+/* ═══ History Card (3-column grid) ═══ */
+function HistoryCard({ submission: s }: { submission: Submission }) {
   const cfg = statusConfig[s.status] || statusConfig.pending;
   const isPending = s.status === "pending";
 
   return (
-    <Link href={isPending ? `/agent-updates/${s.id}` : `/customers/${s.customerId}`}
-      className="block bg-white border border-border rounded-xl hover:border-gray-200 hover:shadow-sm transition-all">
-      <div className="flex items-center gap-3 px-4 py-3">
-        {/* Avatar */}
-        <div className="w-9 h-9 rounded-full bg-gradient-to-br from-slate-400 to-slate-500 flex items-center justify-center text-white text-[10px] font-bold shrink-0">
-          {customerInitials(s.customerName || "??")}
-        </div>
-
-        {/* Info */}
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-sm font-semibold text-gray-900 truncate max-w-[240px]">{s.customerName || "Đã xóa"}</span>
+    <Link href={isPending ? `/agent-updates/${s.id}` : `/customers/${s.customerId}`}>
+      <Card className={cn(
+        "h-full transition-all duration-200 hover:shadow-sm",
+        isPending && "ring-1 ring-amber-200"
+      )}>
+        <CardContent className="p-4 flex flex-col h-full">
+          {/* Top: avatar + status */}
+          <div className="flex items-start justify-between mb-3">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className={cn(
+                "w-9 h-9 rounded-full flex items-center justify-center text-white text-[10px] font-bold shrink-0 shadow-xs",
+                isPending ? "bg-gradient-to-br from-amber-400 to-orange-500"
+                  : s.status === "approved" ? "bg-gradient-to-br from-emerald-400 to-teal-500"
+                  : "bg-gradient-to-br from-red-400 to-rose-500"
+              )}>
+                {customerInitials(s.customerName || "??")}
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-gray-900 truncate max-w-[160px]">{s.customerName || "Đã xóa"}</p>
+                <p className="text-[10px] text-muted-foreground">{(s.devices?.length || s.deviceCount)} thiết bị</p>
+              </div>
+            </div>
             <Badge variant={cfg.badge} size="sm">{cfg.label}</Badge>
-            <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground bg-gray-50 px-2 py-0.5 rounded-full">
-              <HardDrive size={10} />
-              {s.deviceCount} tb
-            </span>
           </div>
-          <div className="flex items-center gap-2 mt-0.5 text-[10px] text-muted-foreground">
-            <span className="flex items-center gap-1">
-              <Building2 size={10} />
-              {s.customerName || "Không xác định"}
-            </span>
-            <span>·</span>
-            <span className="flex items-center gap-1">
+
+          {/* Middle: device type icons (from devices list) */}
+          {s.devices && s.devices.length > 0 ? (
+            <div className="flex items-center gap-1.5 mb-2 flex-wrap">
+              {s.devices.slice(0, 4).map((d: any, i: number) => {
+                const Icon = deviceTypeIcons[d.deviceType] || Box;
+                return (
+                  <div key={i} className="w-6 h-6 rounded-md bg-gray-50 flex items-center justify-center" title={d.deviceType}>
+                    <Icon size={11} className="text-gray-400" />
+                  </div>
+                );
+              })}
+              {s.devices.length > 4 && (
+                <span className="text-[10px] text-muted-foreground">+{s.devices.length - 4}</span>
+              )}
+            </div>
+          ) : (
+            <div className="flex-1" />
+          )}
+
+          {/* Bottom: date + action */}
+          <div className="flex items-center justify-between mt-auto pt-2 border-t border-border/50">
+            <span className="text-[10px] text-muted-foreground flex items-center gap-1">
               <Calendar size={10} />
               {new Date(s.createdAt).toLocaleDateString("vi-VN", {
                 day: "2-digit", month: "2-digit", year: "numeric",
-                hour: "2-digit", minute: "2-digit",
               })}
             </span>
+            {isPending ? (
+              <span className="inline-flex items-center gap-1 text-[11px] font-medium text-primary">
+                Duyệt <ArrowRight size={11} />
+              </span>
+            ) : (
+              <span className="text-[10px] text-muted-foreground">Chi tiết</span>
+            )}
           </div>
-        </div>
-
-        {/* Action */}
-        {isPending ? (
-          <div className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-gray-900 text-white text-[11px] font-medium shadow-xs">
-            <Eye size={13} /> Duyệt
-          </div>
-        ) : (
-          <div className="text-muted-foreground">
-            <MoreHorizontal size={16} />
-          </div>
-        )}
-      </div>
+        </CardContent>
+      </Card>
     </Link>
   );
 }

@@ -123,7 +123,8 @@ export async function POST(
     const mergedNotes = [hostnameNote, notes].filter(Boolean).join("\n");
 
     // Xác định assignedToId: từ assignments hoặc newEmployees
-    let assignedToId: string | null = null;
+    // undefined = không thay đổi, null = xoá gán, string = gán mới
+    let assignedToId: string | null | undefined = undefined;
     if (assignments && assignments[deviceId] !== undefined) {
       assignedToId = assignments[deviceId];
     }
@@ -160,8 +161,8 @@ export async function POST(
             submissionId: submission.id,
             source: "agent",
             collectedAt: new Date(),
-            // Cập nhật assignedTo nếu được chỉ định
-            ...(assignedToId !== null ? { assignedToId } : {}),
+            // Cập nhật assignedTo (kể cả xoá nếu user chọn "Chưa gán")
+            ...(assignedToId !== undefined ? { assignedToId } : {}),
           },
         });
         // Map parsed deviceId → existing DB id
