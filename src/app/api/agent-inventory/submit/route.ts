@@ -293,103 +293,21 @@ export async function POST(req: NextRequest) {
     const devices = parsePowerShellPayload(payload);
     const reviewData = await createReviewData(customerId, devices as Record<string, unknown>[]);
 
-    // 4. Tách thiết bị: existing → auto-update, new → pending review
-    const newDevices = reviewData.devices.filter(d => !d.match.found);
-    const existingDevices = reviewData.devices.filter(d => d.match.found);
-
-    // 4a. Auto-update devices đã có trong DB; build deviceId map để review route resolve parent
-    const parsedToDbMap: Record<string, string> = {};
-    let autoUpdatedCount = 0;
-    for (const dev of existingDevices) {
-      const existingId = dev.match.existingDeviceId;
-      if (!existingId) continue;
-      const d = dev.parsed;
-      const parsedId = String(d.deviceId || `${d.name}_${d.serialNumber || ''}`);
-      parsedToDbMap[parsedId] = existingId;
-
-      const serialNumber = (d.serialNumber as string) || null;
-      const manufacturer = (d.manufacturer as string) || null;
-      const modelName = (d.modelName as string) || null;
-      const ipAddress = (d.ipAddress as string) || null;
-      const macAddress = (d.macAddress as string) || null;
-      const cpu = (d.cpu as string) || null;
-      const ram = (d.ram as string) || null;
-      const disk = (d.disk as string) || null;
-      const os = (d.os as string) || null;
-      const notes = (d.notes as string) || null;
-      const componentsJson = (d.componentsJson as string) || null;
-      const name = (d.name as string) || "";
-      const hostnameNote = name ? `Hostname: ${name}` : "";
-      const mergedNotes = [hostnameNote, notes].filter(Boolean).join("\n");
-
-      await prisma.customerCollectedDevice.update({
-        where: { id: existingId },
-        data: {
-          manufacturer: manufacturer || undefined,
-          modelName: modelName || undefined,
-          serialNumber: serialNumber || undefined,
-          ipAddress: ipAddress || undefined,
-          macAddress: macAddress || undefined,
-          cpu: cpu || undefined,
-          ram: ram || undefined,
-          disk: disk || undefined,
-          os: os || undefined,
-          componentsJson: componentsJson || undefined,
-          notes: mergedNotes || undefined,
-          collectedAt: new Date(),
-          source: "agent",
-        },
-      });
-      autoUpdatedCount++;
-    }
-
-    // 4b. Nếu chỉ có devices đã biết → log history, không tạo pending
-    if (newDevices.length === 0) {
-      const subHistory = await prisma.inventorySubmission.create({
-        data: {
-          customerId,
-          rawPayload: rawText,
-          reviewData: JSON.stringify(reviewData),
-          status: "approved",
-          deviceCount: 0,
-          approvedAt: new Date(),
-        },
-      });
-
-      return NextResponse.json({
-        data: {
-          id: subHistory.id,
-          deviceCount: 0,
-          status: "approved",
-          autoUpdatedCount,
-          message: "Tất cả thiết bị đã được cập nhật tự động",
-        },
-      });
-    }
-
-    // 4c. Chỉ tạo pending submission với devices thực sự mới
-    const newReviewData = {
-      ...reviewData,
-      devices: newDevices,
-      existingDevices: existingDevices,
-      _deviceIdMap: parsedToDbMap,
-    };
-
+    // 4. Lưu submission (tất cả devices, không auto-update — user duyệt rồi mới cập nhật)
     const submission = await prisma.inventorySubmission.create({
       data: {
         customerId,
         rawPayload: rawText,
-        reviewData: JSON.stringify(newReviewData),
+        reviewData: JSON.stringify(reviewData),
         status: "pending",
-        deviceCount: newDevices.length,
+        deviceCount: reviewData.devices.length,
       },
     });
 
     return NextResponse.json({
       data: {
         id: submission.id,
-        deviceCount: newDevices.length,
-        autoUpdatedCount,
+        deviceCount: reviewData.devices.length,
         status: "pending",
       },
     });
