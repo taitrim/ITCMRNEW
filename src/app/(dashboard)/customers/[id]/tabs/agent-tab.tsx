@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Download, Key, RefreshCw, Eye, EyeOff, Check, AlertCircle, Loader2 } from "lucide-react";
+import { Download, Key, RefreshCw, Eye, EyeOff, Check, AlertCircle, Loader2, Clock, Monitor, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type AgentInfo = {
@@ -216,6 +216,83 @@ export function AgentTab({ customerId }: { customerId: string }) {
           <li>Kết quả hiện ở tab <strong>Cập nhật Agent</strong> để duyệt</li>
         </ol>
       </div>
+
+      {/* Lịch sử thu thập */}
+      <SubmissionHistory customerId={customerId} />
+    </div>
+  );
+}
+
+/* ===== Submission History ===== */
+function SubmissionHistory({ customerId }: { customerId: string }) {
+  const [submissions, setSubmissions] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch(`/api/agent-inventory/submissions?customerId=${customerId}`)
+      .then(r => r.json())
+      .then(d => setSubmissions(d.data || []))
+      .finally(() => setLoading(false));
+  }, [customerId]);
+
+  if (loading) return null;
+
+  if (submissions.length === 0) return null;
+
+  const statusCfg: Record<string, { label: string; color: string; bg: string }> = {
+    pending: { label: "Chờ duyệt", color: "text-purple-700", bg: "bg-purple-100" },
+    approved: { label: "Đã duyệt", color: "text-green-700", bg: "bg-green-100" },
+    rejected: { label: "Từ chối", color: "text-red-700", bg: "bg-red-100" },
+  };
+
+  return (
+    <div className="bg-white rounded-xl border border-border/50 p-4">
+      <div className="flex items-center gap-2 mb-3">
+        <Clock size={14} className="text-gray-400" />
+        <h3 className="text-sm font-semibold text-gray-900">Lịch sử thu thập</h3>
+        <span className="text-[10px] text-gray-400 ml-auto">{submissions.length} lần</span>
+      </div>
+
+      <div className="space-y-1.5">
+        {submissions.slice(0, 10).map((s: any) => {
+          const cfg = statusCfg[s.status] || statusCfg.pending;
+          return (
+            <div key={s.id} className="flex items-center gap-3 px-3 py-2 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors">
+              <div className={`w-7 h-7 rounded-lg ${cfg.bg} flex items-center justify-center shrink-0`}>
+                <Monitor size={13} className={cfg.color} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium ${cfg.color} ${cfg.bg}`}>
+                    {cfg.label}
+                  </span>
+                  {s.deviceCount > 0 && (
+                    <span className="text-[10px] text-gray-500">{s.deviceCount} thiết bị mới</span>
+                  )}
+                  {s.deviceCount === 0 && s.status === "approved" && (
+                    <span className="text-[10px] text-blue-500">Tự động cập nhật</span>
+                  )}
+                </div>
+                <div className="text-[10px] text-gray-400 mt-0.5">
+                  {new Date(s.createdAt).toLocaleDateString("vi-VN", {
+                    day: "2-digit", month: "2-digit", year: "numeric",
+                    hour: "2-digit", minute: "2-digit",
+                  })}
+                </div>
+              </div>
+              <ChevronRight size={13} className="text-gray-300" />
+            </div>
+          );
+        })}
+      </div>
+
+      {submissions.length > 10 && (
+        <div className="mt-2 text-center">
+          <a href="/agent-updates" className="text-[10px] text-blue-600 hover:underline">
+            Xem tất cả {submissions.length} lần thu thập →
+          </a>
+        </div>
+      )}
     </div>
   );
 }
