@@ -4,10 +4,13 @@ import { use, useState, useCallback, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft, Check, X, AlertTriangle, Monitor, Printer, HelpCircle,
-  ChevronDown, ChevronRight, UserPlus, Users, FileText,
+  ChevronDown, ChevronRight, UserPlus, Users,
   User, Briefcase, GraduationCap, AtSign, Phone,
-  Plus, Search, Laptop, Server, RefreshCw,
+  Plus, Laptop, Server, RefreshCw,
 } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 import DeviceComponentsPanel from "@/components/DeviceComponentsPanel";
 
 /* ===== Types ===== */
@@ -74,101 +77,102 @@ function DeviceCard({
   const [showSpecs, setShowSpecs] = useState(false);
 
   return (
-    <div className={`group rounded-xl border transition-all duration-200 ${
-      checked
-        ? "border-blue-300 bg-blue-50/40 shadow-sm"
-        : "border-gray-150 bg-white hover:border-gray-200 hover:shadow-sm"
-    }`}>
-      <div className="flex items-start gap-3 px-4 py-3.5">
-        {/* Checkbox */}
-        <input type="checkbox" checked={checked} onChange={onToggle}
-          className="mt-0.5 w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer shrink-0" />
+    <Card className={cn(
+      "transition-all duration-200",
+      checked ? "ring-1 ring-primary/30 bg-primary-50/20" : ""
+    )}>
+      <CardContent className="p-0">
+        <div className="flex items-start gap-3 px-4 py-3.5">
+          {/* Checkbox */}
+          <input type="checkbox" checked={checked} onChange={onToggle}
+            className="mt-0.5 w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary/30 cursor-pointer shrink-0" />
 
-        {/* Left accent strip */}
-        <div className={`shrink-0 w-1 self-stretch rounded-full mt-0.5 mb-0.5 ${
-          isUpdate ? "bg-amber-400" : "bg-green-400"
-        }`} />
+          {/* Left accent strip */}
+          <div className={cn("shrink-0 w-1 self-stretch rounded-full mt-0.5 mb-0.5",
+            isUpdate ? "bg-amber-400" : "bg-emerald-400"
+          )} />
 
-        {/* Icon + info */}
-        <div className="flex items-center gap-3 min-w-0 flex-1">
-          <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-sm ${
-            isUpdate ? "bg-amber-50 text-amber-600" : "bg-green-50 text-green-600"
-          }`}>
-            {deviceIcon(type, 18)}
-          </div>
-          <div className="min-w-0 space-y-1">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-sm font-semibold text-gray-900 truncate max-w-[260px]">{fmt(d.name)}</span>
-              <span className="text-[10px] font-medium text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded-md">{deviceTypeLabel(type)}</span>
-              {isUpdate ? (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-700">
-                  <RefreshCw size={10} /> Cập nhật
-                </span>
-              ) : (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-green-100 text-green-700">
-                  <Plus size={10} /> Mới
-                </span>
+          {/* Icon + info */}
+          <div className="flex items-center gap-3 min-w-0 flex-1">
+            <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-xs",
+              isUpdate ? "bg-amber-50 text-amber-600" : "bg-emerald-50 text-emerald-600"
+            )}>
+              {deviceIcon(type, 18)}
+            </div>
+            <div className="min-w-0 space-y-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-sm font-semibold text-gray-900 truncate max-w-[260px]">{fmt(d.name)}</span>
+                <Badge variant="default" size="sm">{deviceTypeLabel(type)}</Badge>
+                {isUpdate ? (
+                  <Badge variant="warning" size="sm" className="gap-1">
+                    <RefreshCw size={10} /> Cập nhật
+                  </Badge>
+                ) : (
+                  <Badge variant="success" size="sm" className="gap-1">
+                    <Plus size={10} /> Mới
+                  </Badge>
+                )}
+              </div>
+              <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                {d.serialNumber
+                  ? <>Serial: <span className="font-mono text-gray-500">{fmt(d.serialNumber)}</span></>
+                  : <>{d.manufacturer ? fmt(d.manufacturer) : ""} {d.modelName ? fmt(d.modelName) : ""}</>}
+              </div>
+              {isUpdate && (
+                <div className="inline-flex items-center gap-1 text-[10px] text-amber-600 bg-amber-50/80 rounded-md px-2 py-0.5 border border-amber-200/50">
+                  <AlertTriangle size={10} />
+                  Đã có trong danh sách — sẽ cập nhật thông tin
+                </div>
               )}
             </div>
-            <div className="flex items-center gap-2 text-[11px] text-gray-400">
-              {d.serialNumber
-                ? <>Serial: <span className="font-mono text-gray-500">{fmt(d.serialNumber)}</span></>
-                : <>{d.manufacturer ? fmt(d.manufacturer) : ""} {d.modelName ? fmt(d.modelName) : ""}</>}
-            </div>
-            {isUpdate && (
-              <div className="inline-flex items-center gap-1 text-[10px] text-amber-600 bg-amber-50/80 rounded-md px-2 py-0.5 border border-amber-200/50">
-                <AlertTriangle size={10} />
-                Đã có trong danh sách — sẽ cập nhật thông tin
-              </div>
+          </div>
+
+          {/* Actions */}
+          <div className="flex items-center gap-1.5 shrink-0">
+            {isComputer && (
+              <EmployeeSelect
+                employees={employees} value={assignedEmployeeId}
+                onChange={onAssignmentChange} onAdd={onAddEmployee} />
             )}
+            <button onClick={() => setShowSpecs(!showSpecs)}
+              className="p-1.5 rounded-lg text-gray-300 hover:text-gray-500 hover:bg-gray-100 transition-all">
+              {showSpecs ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+            </button>
           </div>
         </div>
 
-        {/* Actions */}
-        <div className="flex items-center gap-1.5 shrink-0">
-          {isComputer && (
-            <EmployeeSelect
-              employees={employees} value={assignedEmployeeId}
-              onChange={onAssignmentChange} onAdd={onAddEmployee} />
-          )}
-          <button onClick={() => setShowSpecs(!showSpecs)}
-            className="p-1.5 rounded-lg text-gray-300 hover:text-gray-500 hover:bg-gray-100 transition-all">
-            {showSpecs ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-          </button>
-        </div>
-      </div>
+        {/* Specs comparison */}
+        {showSpecs ? (
+          <div className="border-t border-border px-4 py-3.5 bg-gray-50/50">
+            {isComputer ? (
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-5 gap-y-2">
+                <SpecItem label="Hãng" value={d.manufacturer} oldValue={match.existingDevice?.manufacturer} />
+                <SpecItem label="Model" value={d.modelName} oldValue={match.existingDevice?.modelName} />
+                <SpecItem label="Serial" value={d.serialNumber} oldValue={match.existingDevice?.serialNumber} />
+                <SpecItem label="IP" value={d.ipAddress} oldValue={match.existingDevice?.ipAddress} />
+                <SpecItem label="MAC" value={d.macAddress} oldValue={match.existingDevice?.macAddress} />
+                <SpecItem label="CPU" value={d.cpu} oldValue={match.existingDevice?.cpu} />
+                <SpecItem label="RAM" value={d.ram} oldValue={match.existingDevice?.ram} />
+                <SpecItem label="Ổ đĩa" value={d.disk} oldValue={match.existingDevice?.disk} />
+                <SpecItem label="HĐH" value={d.os} oldValue={match.existingDevice?.os} />
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-5 gap-y-2">
+                <SpecItem label="Hãng" value={d.manufacturer} oldValue={match.existingDevice?.manufacturer} />
+                <SpecItem label="Model" value={d.modelName} oldValue={match.existingDevice?.modelName} />
+                <SpecItem label="Serial" value={d.serialNumber} oldValue={match.existingDevice?.serialNumber} />
+              </div>
+            )}
 
-      {/* Specs comparison */}
-      {showSpecs ? (
-        <div className="border-t border-gray-100 px-4 py-3.5 bg-gray-50/70">
-          {isComputer ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-5 gap-y-2">
-              <SpecItem label="Hãng" value={d.manufacturer} oldValue={match.existingDevice?.manufacturer} />
-              <SpecItem label="Model" value={d.modelName} oldValue={match.existingDevice?.modelName} />
-              <SpecItem label="Serial" value={d.serialNumber} oldValue={match.existingDevice?.serialNumber} />
-              <SpecItem label="IP" value={d.ipAddress} oldValue={match.existingDevice?.ipAddress} />
-              <SpecItem label="MAC" value={d.macAddress} oldValue={match.existingDevice?.macAddress} />
-              <SpecItem label="CPU" value={d.cpu} oldValue={match.existingDevice?.cpu} />
-              <SpecItem label="RAM" value={d.ram} oldValue={match.existingDevice?.ram} />
-              <SpecItem label="Ổ đĩa" value={d.disk} oldValue={match.existingDevice?.disk} />
-              <SpecItem label="HĐH" value={d.os} oldValue={match.existingDevice?.os} />
-            </div>
-          ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-5 gap-y-2">
-              <SpecItem label="Hãng" value={d.manufacturer} oldValue={match.existingDevice?.manufacturer} />
-              <SpecItem label="Model" value={d.modelName} oldValue={match.existingDevice?.modelName} />
-              <SpecItem label="Serial" value={d.serialNumber} oldValue={match.existingDevice?.serialNumber} />
-            </div>
-          )}
-
-          {d.componentsJson ? (
-            <div className="mt-3 pt-3 border-t border-gray-200/60">
-              <DeviceComponentsPanel componentsJson={String(d.componentsJson)} />
-            </div>
-          ) : null}
-        </div>
-      ) : null}
-    </div>
+            {d.componentsJson ? (
+              <div className="mt-3 pt-3 border-t border-border/60">
+                <DeviceComponentsPanel componentsJson={String(d.componentsJson)} />
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -179,34 +183,32 @@ function SpecItem({ label, value, oldValue }: { label: string; value: unknown; o
 
   return (
     <div className="flex items-center gap-1.5 text-[11px]">
-      <span className="text-gray-400 w-10 shrink-0">{label}</span>
+      <span className="text-muted-foreground w-10 shrink-0">{label}</span>
       {oldVal !== "—" && changed ? (
         <div className="flex items-center gap-1 min-w-0">
-          <span className="text-blue-600 font-medium truncate">{newVal}</span>
+          <span className="text-primary font-medium truncate">{newVal}</span>
           <span className="text-gray-300 shrink-0">→</span>
           <span className="text-amber-500 line-through truncate">{oldVal}</span>
           <span className="shrink-0 w-1.5 h-1.5 rounded-full bg-amber-400" />
         </div>
       ) : (
-        <span className={`truncate ${changed ? "text-blue-600 font-medium" : "text-gray-600"}`}>{newVal}</span>
+        <span className={cn("truncate", changed ? "text-primary font-medium" : "text-gray-600")}>{newVal}</span>
       )}
     </div>
   );
 }
 
 /* ===== Employee Select ===== */
-function EmployeeSelect({
-  employees, value, onChange, onAdd,
-}: {
+function EmployeeSelect({ employees, value, onChange, onAdd }: {
   employees: Employee[]; value: string | null;
   onChange: (id: string | null) => void; onAdd: () => void;
 }) {
   return (
     <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
       <div className="relative">
-        <Users size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+        <Users size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
         <select value={value || ""} onChange={e => onChange(e.target.value || null)}
-          className="pl-7 pr-2 h-7 rounded-lg border border-gray-200 text-[11px] text-gray-600 bg-white hover:border-gray-300 focus:border-blue-300 focus:ring-1 focus:ring-blue-200 transition cursor-pointer appearance-none min-w-[120px]">
+          className="pl-7 pr-2 h-7 rounded-lg border border-border text-[11px] text-gray-600 bg-white hover:border-gray-300 focus:border-primary/30 focus:ring-1 focus:ring-primary/20 transition cursor-pointer appearance-none min-w-[120px]">
           <option value="">Chưa gán</option>
           {employees.map(emp => (
             <option key={emp.id} value={emp.id}>{emp.lastName} {emp.firstName}</option>
@@ -214,7 +216,7 @@ function EmployeeSelect({
         </select>
       </div>
       <button onClick={onAdd} title="Thêm nhân viên mới"
-        className="w-7 h-7 rounded-lg border border-dashed border-gray-200 flex items-center justify-center text-gray-400 hover:text-blue-600 hover:border-blue-300 hover:bg-blue-50 transition-all">
+        className="w-7 h-7 rounded-lg border border-dashed border-border flex items-center justify-center text-muted-foreground hover:text-primary hover:border-primary/30 hover:bg-primary-50 transition-all">
         <UserPlus size={12} />
       </button>
     </div>
@@ -222,9 +224,7 @@ function EmployeeSelect({
 }
 
 /* ===== Add Employee Modal ===== */
-function AddEmployeeModal({
-  customerId, onSave, onClose,
-}: {
+function AddEmployeeModal({ customerId, onSave, onClose }: {
   customerId: string; onSave: (emp: Employee) => void; onClose: () => void;
 }) {
   const [firstName, setFirstName] = useState("");
@@ -257,9 +257,9 @@ function AddEmployeeModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm" onClick={onClose}>
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4 overflow-hidden" onClick={e => e.stopPropagation()}>
-        <div className="px-5 py-4 border-b border-gray-100">
+        <div className="px-5 py-4 border-b border-border">
           <h3 className="text-sm font-semibold text-gray-900">Thêm nhân viên</h3>
-          <p className="text-[11px] text-gray-400 mt-0.5">Nhập thông tin nhân viên mới</p>
+          <p className="text-[11px] text-muted-foreground mt-0.5">Nhập thông tin nhân viên mới</p>
         </div>
         <div className="p-5 space-y-3">
           <div className="grid grid-cols-2 gap-3">
@@ -273,10 +273,10 @@ function AddEmployeeModal({
             <InputField icon={<GraduationCap size={13} />} placeholder="Phòng ban" value={department} onChange={setDepartment} />
           </div>
         </div>
-        <div className="px-5 py-4 border-t border-gray-100 flex items-center justify-end gap-2">
-          <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-gray-500 hover:bg-gray-100 transition-all">Huỷ</button>
+        <div className="px-5 py-4 border-t border-border flex items-center justify-end gap-2">
+          <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs text-muted-foreground hover:bg-gray-100 transition-all">Huỷ</button>
           <button onClick={handleSubmit} disabled={!firstName.trim() || saving}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gray-900 text-white text-xs font-medium hover:bg-gray-800 disabled:opacity-50 transition-all shadow-sm">
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gray-900 text-white text-xs font-medium hover:bg-gray-800 disabled:opacity-50 transition-all shadow-xs">
             {saving ? "Đang lưu..." : "Thêm nhân viên"}
           </button>
         </div>
@@ -290,9 +290,9 @@ function InputField({ icon, placeholder, value, onChange, type }: {
 }) {
   return (
     <div className="relative">
-      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">{icon}</span>
+      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">{icon}</span>
       <input type={type || "text"} placeholder={placeholder} value={value} onChange={e => onChange(e.target.value)}
-        className="w-full pl-9 pr-3 h-10 rounded-xl border border-gray-200 text-xs text-gray-700 placeholder-gray-400 focus:border-blue-300 focus:ring-1 focus:ring-blue-200 transition-all" />
+        className="w-full pl-9 pr-3 h-10 rounded-xl border border-border text-xs text-gray-700 placeholder-gray-400 focus:border-primary/30 focus:ring-1 focus:ring-primary/20 transition-all" />
     </div>
   );
 }
@@ -366,14 +366,14 @@ export default function SubmissionReviewPage({ params }: { params: Promise<{ id:
 
   const stats = useMemo(() => {
     if (!reviewData) return { total: 0, matched: 0, newCount: 0 };
-    const total = reviewData.devices.length;
-    const matched = reviewData.devices.filter(d => d.match.found).length;
-    return { total, matched, newCount: total - matched };
+    return {
+      total: reviewData.devices.length,
+      matched: reviewData.devices.filter(d => d.match.found).length,
+      newCount: reviewData.devices.length - reviewData.devices.filter(d => d.match.found).length,
+    };
   }, [reviewData]);
 
-  const assignedCount = useMemo(() => {
-    return Object.values(assignments).filter(Boolean).length;
-  }, [assignments]);
+  const assignedCount = useMemo(() => Object.values(assignments).filter(Boolean).length, [assignments]);
 
   const handleAssignmentChange = useCallback((index: number, employeeId: string | null) => {
     setAssignments(prev => ({ ...prev, [index]: employeeId }));
@@ -403,9 +403,7 @@ export default function SubmissionReviewPage({ params }: { params: Promise<{ id:
       const res = await fetch(`/api/agent-inventory/submissions/${id}/review`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "approve", selectedDevices: selectedIds, assignments,
-        }),
+        body: JSON.stringify({ action: "approve", selectedDevices: selectedIds, assignments }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Lỗi");
@@ -438,7 +436,7 @@ export default function SubmissionReviewPage({ params }: { params: Promise<{ id:
 
   /* ── Loading ── */
   if (loading) return (
-    <div className="min-h-screen bg-[#f8f9fc]">
+    <div className="min-h-screen bg-surface-secondary/30">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 space-y-4">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-gray-200 animate-pulse" />
@@ -447,9 +445,9 @@ export default function SubmissionReviewPage({ params }: { params: Promise<{ id:
             <div className="h-3 w-32 bg-gray-100 rounded animate-pulse" />
           </div>
         </div>
-        <div className="h-12 bg-white rounded-xl border border-gray-100 animate-pulse" />
+        <div className="h-12 bg-white rounded-xl border border-border animate-pulse" />
         {[1,2,3].map(i => (
-          <div key={i} className="h-20 bg-white rounded-xl border border-gray-100 animate-pulse flex items-center px-5">
+          <div key={i} className="h-20 bg-white rounded-xl border border-border animate-pulse flex items-center px-5">
             <div className="w-10 h-10 rounded-xl bg-gray-100 mr-3" />
             <div className="flex-1 space-y-2">
               <div className="h-4 w-40 bg-gray-100 rounded" />
@@ -462,42 +460,48 @@ export default function SubmissionReviewPage({ params }: { params: Promise<{ id:
   );
 
   if (error && !submission) return (
-    <div className="min-h-screen bg-[#f8f9fc] flex items-center justify-center px-4">
-      <div className="max-w-sm w-full rounded-2xl border border-red-200 bg-red-50 p-8 text-center">
-        <AlertTriangle size={32} className="text-red-400 mx-auto mb-3" />
-        <p className="text-sm text-red-700">{error}</p>
-      </div>
+    <div className="min-h-screen bg-surface-secondary/30 flex items-center justify-center px-4">
+      <Card className="max-w-sm w-full">
+        <CardContent className="flex flex-col items-center py-8 text-center">
+          <AlertTriangle size={32} className="text-red-400 mb-3" />
+          <p className="text-sm text-red-700">{error}</p>
+        </CardContent>
+      </Card>
     </div>
   );
 
   /* ── Result screen ── */
   if (result) return (
-    <div className="min-h-screen bg-[#f8f9fc] flex items-center justify-center px-4">
-      <div className="max-w-sm w-full rounded-2xl bg-white p-8 text-center shadow-lg border border-gray-100">
-        <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-sm ${
-          result.status === "approved" ? "bg-gradient-to-br from-green-400 to-green-500" : "bg-gradient-to-br from-red-400 to-red-500"
-        }`}>
-          {result.status === "approved"
-            ? <Check size={28} className="text-white" />
-            : <X size={28} className="text-white" />}
-        </div>
-        <h2 className="text-lg font-bold text-gray-900 mb-1">
-          {result.status === "approved" ? "Đã duyệt thành công" : "Đã từ chối"}
-        </h2>
-        {result.status === "approved" && (
-          <p className="text-sm text-green-700 mb-1">Đã xác nhận <strong>{result.confirmedCount}</strong> thiết bị</p>
-        )}
-        <div className="flex items-center justify-center gap-3 mt-6">
-          <button onClick={() => router.push(`/customers/${submission?.customerId}`)}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gray-900 text-white text-sm font-medium hover:bg-gray-800 transition-all shadow-sm">
-            <ArrowLeft size={14} /> Khách hàng
-          </button>
-          <button onClick={() => router.push("/agent-updates")}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white text-gray-500 text-sm font-medium border border-gray-200 hover:bg-gray-50 transition-all">
-            Danh sách
-          </button>
-        </div>
-      </div>
+    <div className="min-h-screen bg-surface-secondary/30 flex items-center justify-center px-4">
+      <Card className="max-w-sm w-full">
+        <CardContent className="flex flex-col items-center py-8 text-center">
+          <div className={cn("w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-sm",
+            result.status === "approved"
+              ? "bg-gradient-to-br from-emerald-400 to-emerald-500"
+              : "bg-gradient-to-br from-red-400 to-red-500"
+          )}>
+            {result.status === "approved"
+              ? <Check size={28} className="text-white" />
+              : <X size={28} className="text-white" />}
+          </div>
+          <h2 className="text-lg font-bold text-gray-900 mb-1">
+            {result.status === "approved" ? "Đã duyệt thành công" : "Đã từ chối"}
+          </h2>
+          {result.status === "approved" && (
+            <p className="text-sm text-emerald-700 mb-1">Đã xác nhận <strong>{result.confirmedCount}</strong> thiết bị</p>
+          )}
+          <div className="flex items-center justify-center gap-3 mt-6">
+            <button onClick={() => router.push(`/customers/${submission?.customerId}`)}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gray-900 text-white text-sm font-medium hover:bg-gray-800 transition-all shadow-xs">
+              <ArrowLeft size={14} /> Khách hàng
+            </button>
+            <button onClick={() => router.push("/agent-updates")}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white text-muted-foreground text-sm font-medium border border-border hover:bg-gray-50 transition-all">
+              Danh sách
+            </button>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 
@@ -510,18 +514,18 @@ export default function SubmissionReviewPage({ params }: { params: Promise<{ id:
     .filter(({ d }) => !["computer","desktop","laptop","server","aio","tablet"].includes((d.parsed.deviceType as string) || "")) || [];
 
   return (
-    <div className="min-h-screen bg-[#f8f9fc]">
+    <div className="min-h-screen bg-surface-secondary/30">
 
       {/* ═══ Header ═══ */}
-      <div className="sticky top-0 z-20 bg-white/80 backdrop-blur-md border-b border-gray-200/60">
+      <div className="sticky top-0 z-20 bg-white/80 backdrop-blur-md border-b border-border">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <button onClick={() => router.back()} className="p-2 rounded-xl text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-all">
+              <button onClick={() => router.back()} className="p-2 rounded-xl text-muted-foreground hover:text-gray-600 hover:bg-gray-100 transition-all">
                 <ArrowLeft size={18} />
               </button>
               <div>
-                <div className="text-[11px] text-gray-400 tracking-wide uppercase">Duyệt thiết bị</div>
+                <div className="text-[11px] text-muted-foreground tracking-wide uppercase">Duyệt thiết bị</div>
                 <h1 className="text-base font-bold text-gray-900">
                   {submission?.customerName || "Đã xóa"}
                 </h1>
@@ -530,29 +534,25 @@ export default function SubmissionReviewPage({ params }: { params: Promise<{ id:
 
             {/* Stats badges */}
             <div className="flex items-center gap-2">
-              <div className="flex items-center gap-1.5 bg-green-50 rounded-xl px-3 py-1.5 border border-green-100">
-                <Plus size={12} className="text-green-600" />
-                <span className="text-sm font-bold text-green-700">{stats.newCount}</span>
-                <span className="text-[11px] text-green-500">Mới</span>
-              </div>
-              <div className="flex items-center gap-1.5 bg-amber-50 rounded-xl px-3 py-1.5 border border-amber-100">
-                <RefreshCw size={12} className="text-amber-600" />
-                <span className="text-sm font-bold text-amber-700">{stats.matched}</span>
-                <span className="text-[11px] text-amber-500">Cập nhật</span>
-              </div>
+              <Badge variant="success" size="md" className="gap-1.5 px-3 py-1.5">
+                <Plus size={12} /> {stats.newCount} Mới
+              </Badge>
+              <Badge variant="warning" size="md" className="gap-1.5 px-3 py-1.5">
+                <RefreshCw size={12} /> {stats.matched} Cập nhật
+              </Badge>
             </div>
           </div>
 
           {/* Action bar */}
-          <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-100">
+          <div className="flex items-center justify-between mt-3 pt-3 border-t border-border">
             <div className="flex items-center gap-4 text-xs">
-              <label className="flex items-center gap-2 cursor-pointer text-gray-500 hover:text-gray-700 transition-colors">
+              <label className="flex items-center gap-2 cursor-pointer text-muted-foreground hover:text-gray-700 transition-colors">
                 <input type="checkbox" checked={selected.size === reviewData?.devices.length}
                   onChange={toggleAll}
-                  className="w-3.5 h-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+                  className="w-3.5 h-3.5 rounded border-gray-300 text-primary focus:ring-primary/30" />
                 Chọn tất cả
               </label>
-              <span className="text-gray-400">
+              <span className="text-muted-foreground">
                 <strong className="text-gray-600">{selected.size}</strong> / {reviewData?.devices.length || 0}
                 {assignedCount > 0 ? <span className="ml-2">· Gán <strong className="text-gray-600">{assignedCount}</strong></span> : null}
               </span>
@@ -563,7 +563,7 @@ export default function SubmissionReviewPage({ params }: { params: Promise<{ id:
                 <X size={13} /> Từ chối
               </button>
               <button onClick={handleApprove} disabled={selected.size === 0 || submitting}
-                className="inline-flex items-center gap-2 px-5 py-2 rounded-xl bg-gray-900 text-white text-xs font-medium hover:bg-gray-800 transition-all disabled:opacity-50 shadow-sm">
+                className="inline-flex items-center gap-2 px-5 py-2 rounded-xl bg-gray-900 text-white text-xs font-medium hover:bg-gray-800 transition-all disabled:opacity-50 shadow-xs">
                 {submitting
                   ? "Đang xử lý..."
                   : <><Check size={13} /> Duyệt {selected.size} thiết bị</>}
@@ -577,7 +577,7 @@ export default function SubmissionReviewPage({ params }: { params: Promise<{ id:
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-8">
 
         {error && (
-          <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-xs text-red-700">{error}</div>
+          <div className="rounded-xl bg-red-50 border border-red-100 p-4 text-xs text-red-700">{error}</div>
         )}
 
         {reviewData ? (
@@ -586,12 +586,12 @@ export default function SubmissionReviewPage({ params }: { params: Promise<{ id:
             {computerDevices.length > 0 ? (
               <section>
                 <div className="flex items-center gap-3 mb-4">
-                  <div className="w-8 h-8 rounded-xl bg-blue-100 flex items-center justify-center">
-                    <Monitor size={15} className="text-blue-600" />
+                  <div className="w-8 h-8 rounded-xl bg-sky-50 flex items-center justify-center">
+                    <Monitor size={15} className="text-sky-600" />
                   </div>
                   <div>
                     <h2 className="text-sm font-bold text-gray-700">Máy tính</h2>
-                    <p className="text-[11px] text-gray-400">{computerDevices.length} thiết bị</p>
+                    <p className="text-[11px] text-muted-foreground">{computerDevices.length} thiết bị</p>
                   </div>
                 </div>
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
@@ -609,12 +609,12 @@ export default function SubmissionReviewPage({ params }: { params: Promise<{ id:
             {otherDevices.length > 0 ? (
               <section>
                 <div className="flex items-center gap-3 mb-4">
-                  <div className="w-8 h-8 rounded-xl bg-amber-100 flex items-center justify-center">
+                  <div className="w-8 h-8 rounded-xl bg-amber-50 flex items-center justify-center">
                     <Printer size={15} className="text-amber-600" />
                   </div>
                   <div>
                     <h2 className="text-sm font-bold text-gray-700">Thiết bị khác</h2>
-                    <p className="text-[11px] text-gray-400">{otherDevices.length} thiết bị</p>
+                    <p className="text-[11px] text-muted-foreground">{otherDevices.length} thiết bị</p>
                   </div>
                 </div>
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
@@ -629,29 +629,31 @@ export default function SubmissionReviewPage({ params }: { params: Promise<{ id:
 
             {/* ── Pending parents warning ── */}
             {reviewData.pendingParents > 0 ? (
-              <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 flex items-start gap-3">
-                <div className="w-8 h-8 rounded-xl bg-amber-100 flex items-center justify-center shrink-0">
-                  <AlertTriangle size={15} className="text-amber-600" />
-                </div>
-                <div className="text-xs text-amber-800">
-                  <strong className="font-semibold">{reviewData.pendingParents} thiết bị</strong> chưa xác định được máy tính cha. Kiểm tra kỹ trước khi duyệt.
-                </div>
-              </div>
+              <Card className="border-amber-200 bg-amber-50">
+                <CardContent className="flex items-start gap-3 py-4">
+                  <div className="w-8 h-8 rounded-xl bg-amber-100 flex items-center justify-center shrink-0">
+                    <AlertTriangle size={15} className="text-amber-600" />
+                  </div>
+                  <div className="text-xs text-amber-800">
+                    <strong className="font-semibold">{reviewData.pendingParents} thiết bị</strong> chưa xác định được máy tính cha. Kiểm tra kỹ trước khi duyệt.
+                  </div>
+                </CardContent>
+              </Card>
             ) : null}
           </>
         ) : null}
 
         {/* ── Bottom bar ── */}
-        <div className="sticky bottom-4 z-10 bg-white/90 backdrop-blur-md rounded-2xl border border-gray-200/80 px-5 py-3.5 flex items-center justify-between shadow-lg">
-          <div className="flex items-center gap-5 text-xs text-gray-400">
+        <div className="sticky bottom-4 z-10 bg-white/90 backdrop-blur-md rounded-2xl border border-border/80 px-5 py-3.5 flex items-center justify-between shadow-lg">
+          <div className="flex items-center gap-5 text-xs text-muted-foreground">
             <span><strong className="text-gray-600">{selected.size}</strong> / {reviewData?.devices.length || 0} chọn</span>
             {assignedCount > 0 ? <span><strong className="text-gray-600">{assignedCount}</strong> đã gán</span> : null}
             <span className="text-gray-300">·</span>
-            <span className="text-green-600">+{stats.newCount} mới</span>
+            <span className="text-emerald-600">+{stats.newCount} mới</span>
             <span className="text-amber-600">{stats.matched} cập nhật</span>
           </div>
           <button onClick={handleApprove} disabled={selected.size === 0 || submitting}
-            className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-medium hover:bg-gray-800 disabled:opacity-50 transition-all shadow-sm">
+            className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-medium hover:bg-gray-800 disabled:opacity-50 transition-all shadow-xs">
             {submitting ? "Đang xử lý..." : <><Check size={15} /> Duyệt {selected.size} thiết bị</>}
           </button>
         </div>

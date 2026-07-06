@@ -183,7 +183,7 @@ test.describe('Agent Flow (customer key-based)', () => {
     // Check agent-updates list page
     await page.goto('/agent-updates');
     await page.waitForURL('/agent-updates', { timeout: 15_000 });
-    await expect(page.getByRole('heading', { name: 'Cập nhật Agent' })).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole('heading', { name: 'Agent Inventory' })).toBeVisible({ timeout: 10_000 });
   });
 
   test('Agent tab in customer list modal', async ({ page }) => {
