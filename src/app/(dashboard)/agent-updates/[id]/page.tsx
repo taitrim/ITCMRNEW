@@ -4,7 +4,7 @@ import { use, useState, useCallback, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft, Check, X, AlertTriangle, Monitor, Printer, HelpCircle,
-  ChevronDown, ChevronRight, UserPlus, Users, FileText
+  ChevronDown, ChevronRight, UserPlus, Users, FileText, Save, User, Briefcase, GraduationCap, AtSign, Phone
 } from "lucide-react";
 import DeviceComponentsPanel from "@/components/DeviceComponentsPanel";
 
@@ -66,24 +66,148 @@ function fmt(val: unknown): string {
 }
 
 /* ===== Employee Assignment UI ===== */
+/* ===== Add Employee Modal ===== */
+function AddEmployeeModal({
+  customerId,
+  onSave,
+  onClose,
+}: {
+  customerId: string;
+  onSave: (emp: Employee) => void;
+  onClose: () => void;
+}) {
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [position, setPosition] = useState("");
+  const [department, setDepartment] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const handleSubmit = async () => {
+    if (!firstName.trim()) return;
+    setSaving(true);
+    try {
+      const res = await fetch("/api/customer-employees", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          customerId,
+          firstName: firstName.trim(),
+          lastName: lastName.trim(),
+          email: email.trim() || null,
+          phone: phone.trim() || null,
+          position: position.trim() || null,
+          department: department.trim() || null,
+        }),
+      });
+      if (!res.ok) throw new Error("Lưu thất bại");
+      const emp = await res.json();
+      onSave(emp);
+    } catch (e) {
+      alert("Không thể tạo nhân viên");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/40" />
+      <div className="relative bg-white rounded-xl shadow-xl w-full max-w-sm mx-auto overflow-hidden" onClick={e => e.stopPropagation()}>
+        {/* Header */}
+        <div className="px-4 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <UserPlus size={16} />
+            <span className="text-sm font-semibold">Thêm nhân viên</span>
+          </div>
+          <button onClick={onClose} className="p-1 rounded hover:bg-white/20 transition">
+            <X size={14} />
+          </button>
+        </div>
+        {/* Form */}
+        <div className="p-4 space-y-3">
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-[10px] text-gray-400 font-medium">Tên <span className="text-red-400">*</span></label>
+              <input value={firstName} onChange={e => setFirstName(e.target.value)}
+                className="w-full px-2.5 py-1.5 text-[12px] border border-gray-200 rounded-lg focus:outline-none focus:border-blue-400" />
+            </div>
+            <div>
+              <label className="text-[10px] text-gray-400 font-medium">Họ</label>
+              <input value={lastName} onChange={e => setLastName(e.target.value)}
+                className="w-full px-2.5 py-1.5 text-[12px] border border-gray-200 rounded-lg focus:outline-none focus:border-blue-400" />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-[10px] text-gray-400 font-medium">Email</label>
+              <div className="flex items-center border border-gray-200 rounded-lg px-2.5">
+                <AtSign size={12} className="text-gray-300 mr-1" />
+                <input value={email} onChange={e => setEmail(e.target.value)} placeholder="email@cty.com"
+                  className="w-full py-1.5 text-[12px] focus:outline-none" />
+              </div>
+            </div>
+            <div>
+              <label className="text-[10px] text-gray-400 font-medium">SĐT</label>
+              <div className="flex items-center border border-gray-200 rounded-lg px-2.5">
+                <Phone size={12} className="text-gray-300 mr-1" />
+                <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="090..."
+                  className="w-full py-1.5 text-[12px] focus:outline-none" />
+              </div>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-[10px] text-gray-400 font-medium">Chức vụ</label>
+              <div className="flex items-center border border-gray-200 rounded-lg px-2.5">
+                <Briefcase size={12} className="text-gray-300 mr-1" />
+                <input value={position} onChange={e => setPosition(e.target.value)} placeholder="Trưởng phòng"
+                  className="w-full py-1.5 text-[12px] focus:outline-none" />
+              </div>
+            </div>
+            <div>
+              <label className="text-[10px] text-gray-400 font-medium">Phòng ban</label>
+              <div className="flex items-center border border-gray-200 rounded-lg px-2.5">
+                <GraduationCap size={12} className="text-gray-300 mr-1" />
+                <input value={department} onChange={e => setDepartment(e.target.value)} placeholder="IT"
+                  className="w-full py-1.5 text-[12px] focus:outline-none" />
+              </div>
+            </div>
+          </div>
+        </div>
+        {/* Footer */}
+        <div className="px-4 py-3 bg-gray-50 flex items-center justify-end gap-2">
+          <button onClick={onClose}
+            className="px-3 py-1.5 text-[11px] text-gray-500 hover:text-gray-700 rounded-lg hover:bg-gray-100 transition">
+            Huỷ
+          </button>
+          <button onClick={handleSubmit} disabled={saving || !firstName.trim()}
+            className="px-3 py-1.5 text-[11px] font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition flex items-center gap-1">
+            <Save size={12} /> {saving ? "Đang lưu..." : "Thêm & gán"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ===== Employee Assignment UI ===== */
 function EmployeeAssignment({
   deviceId,
   deviceName,
   employees,
   assignedEmployeeId,
   onChange,
-  customerId,
+  onAddEmployee,
 }: {
   deviceId: string;
   deviceName: string;
   employees: Employee[];
   assignedEmployeeId: string | null;
   onChange: (employeeId: string | null) => void;
-  customerId: string;
+  onAddEmployee: () => void;
 }) {
-  const [isOpen, setIsOpen] = useState(false);
-  const router = useRouter();
-
   const assignedEmp = assignedEmployeeId ? employees.find(e => e.id === assignedEmployeeId) : null;
 
   return (
@@ -104,10 +228,10 @@ function EmployeeAssignment({
           ))}
         </select>
         <button
-          onClick={() => window.open(`/customer-employees?customerId=${customerId}`, '_blank')}
+          onClick={onAddEmployee}
           className="px-2 py-1 text-[10px] text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded transition flex items-center gap-1 whitespace-nowrap"
         >
-          <UserPlus size={11} /> QL nhân viên
+          <UserPlus size={11} /> Thêm
         </button>
       </div>
       {assignedEmp && (
@@ -190,13 +314,13 @@ function DetailRow({ label, value }: { label: string; value: string }) {
 function DeviceRow({
   device, index, checked, onToggle,
   employees, assignedEmployeeId,
-  onAssignmentChange, customerId,
+  onAssignmentChange, onAddEmployee,
 }: {
   device: ReviewDevice; index: number; checked: boolean; onToggle: () => void;
   employees: Employee[];
   assignedEmployeeId: string | null;
   onAssignmentChange: (employeeId: string | null) => void;
-  customerId: string;
+  onAddEmployee: () => void;
 }) {
   const { parsed, match } = device;
   const type = (parsed.deviceType as string) || "computer";
@@ -301,7 +425,7 @@ function DeviceRow({
           employees={employees}
           assignedEmployeeId={assignedEmployeeId}
           onChange={onAssignmentChange}
-          customerId={customerId}
+          onAddEmployee={onAddEmployee}
         />
       )}
     </div>
@@ -345,6 +469,9 @@ export default function SubmissionReviewPage({ params }: { params: Promise<{ id:
 
   // Assignment state: deviceIndex -> assigned employee id | null
   const [assignments, setAssignments] = useState<Record<number, string | null>>({});
+  // Add employee modal
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [addModalDeviceIdx, setAddModalDeviceIdx] = useState<number | null>(null);
 
   // Load submission + employees
   const loadData = useCallback(async () => {
@@ -365,7 +492,7 @@ export default function SubmissionReviewPage({ params }: { params: Promise<{ id:
         const empRes = await fetch(`/api/customer-employees?customerId=${subJson.data.customerId}`);
         if (empRes.ok) {
           const empJson = await empRes.json();
-          setEmployees(empJson.data || []);
+          setEmployees(Array.isArray(empJson) ? empJson : []);
         }
       }
 
@@ -401,6 +528,22 @@ export default function SubmissionReviewPage({ params }: { params: Promise<{ id:
   const handleAssignmentChange = useCallback((index: number, employeeId: string | null) => {
     setAssignments(prev => ({ ...prev, [index]: employeeId }));
   }, []);
+
+  const handleOpenAddEmployee = useCallback((index: number) => {
+    setAddModalDeviceIdx(index);
+    setShowAddModal(true);
+  }, []);
+
+  const handleEmployeeCreated = useCallback((emp: Employee) => {
+    // Add to employees list
+    setEmployees(prev => [...prev, emp]);
+    // Auto-assign new employee to the device
+    if (addModalDeviceIdx !== null) {
+      setAssignments(prev => ({ ...prev, [addModalDeviceIdx]: emp.id }));
+    }
+    setShowAddModal(false);
+    setAddModalDeviceIdx(null);
+  }, [addModalDeviceIdx]);
 
   // Approve — send assignments
   const handleApprove = useCallback(async () => {
@@ -557,7 +700,7 @@ export default function SubmissionReviewPage({ params }: { params: Promise<{ id:
                 employees={employees}
                 assignedEmployeeId={assignments[i] ?? null}
                 onAssignmentChange={(empId) => handleAssignmentChange(i, empId)}
-                customerId={submission?.customerId || ""}
+                onAddEmployee={() => handleOpenAddEmployee(i)}
               />
             ))}
 
@@ -582,7 +725,7 @@ export default function SubmissionReviewPage({ params }: { params: Promise<{ id:
                 employees={employees}
                 assignedEmployeeId={null}
                 onAssignmentChange={() => {}}
-                customerId={submission?.customerId || ""}
+                onAddEmployee={() => {}} // non-computer không gán
               />
             ))}
         </div>
@@ -610,6 +753,15 @@ export default function SubmissionReviewPage({ params }: { params: Promise<{ id:
           {submitting ? "Đang xử lý..." : `Xác nhận ${selected.size} thiết bị`}
         </button>
       </div>
+
+      {/* Add Employee Modal */}
+      {showAddModal && submission?.customerId && (
+        <AddEmployeeModal
+          customerId={submission.customerId}
+          onSave={handleEmployeeCreated}
+          onClose={() => { setShowAddModal(false); setAddModalDeviceIdx(null); }}
+        />
+      )}
     </div>
   );
 }
