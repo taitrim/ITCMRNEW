@@ -4,7 +4,8 @@ import { useState, useCallback, useEffect } from "react";
 import Link from "next/link";
 import {
   Monitor, Clock, CheckCircle, XCircle, AlertTriangle,
-  ChevronRight, ChevronLeft, Eye, RefreshCw, Download
+  ChevronRight, ChevronLeft, Eye, RefreshCw, Download,
+  Filter, List, RefreshCwIcon,
 } from "lucide-react";
 
 /* ===== Types ===== */
@@ -15,13 +16,6 @@ type Submission = {
   status: string;
   deviceCount: number;
   createdAt: string;
-};
-
-/* ===== Status config ===== */
-const statusCfg: Record<string, { label: string; color: string; bg: string }> = {
-  pending: { label: "Chờ duyệt", color: "text-purple-700", bg: "bg-purple-100" },
-  approved: { label: "Đã duyệt", color: "text-green-700", bg: "bg-green-100" },
-  rejected: { label: "Từ chối", color: "text-red-700", bg: "bg-red-100" },
 };
 
 const PAGE_SIZE = 20;
@@ -64,180 +58,243 @@ export default function AgentUpdatesPage() {
     setPage(1);
   };
 
+  const statFilters = [
+    { key: "all", label: "Tất cả", count: stats.total, active: filter === "all", color: "gray" },
+    { key: "pending", label: "Chờ duyệt", count: stats.pending, active: filter === "pending", color: "purple" },
+    { key: "approved", label: "Đã duyệt", count: stats.approved, active: filter === "approved", color: "green" },
+    { key: "rejected", label: "Từ chối", count: stats.rejected, active: filter === "rejected", color: "red" },
+  ] as const;
+
   return (
-    <div className="p-6 max-w-5xl mx-auto">
-      {/* Header */}
-      <div className="mb-5">
-        <h1 className="text-xl font-semibold text-gray-900">Cập nhật Agent</h1>
-        <p className="text-xs text-gray-400 mt-0.5">
-          Dữ liệu thiết bị gửi về từ Agent Script tại khách hàng
-        </p>
-      </div>
-
-      {/* Stats bar + filters */}
-      <div className="flex items-center gap-2 mb-4 text-xs flex-wrap">
-        <button onClick={() => handleFilterChange("all")}
-          className={`px-3 py-1.5 rounded-lg transition ${filter === "all" ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}>
-          Tất cả <span className="font-medium ml-1">{stats.total}</span>
-        </button>
-        <button onClick={() => handleFilterChange("pending")}
-          className={`px-3 py-1.5 rounded-lg transition ${filter === "pending" ? "bg-purple-600 text-white" : "bg-purple-50 text-purple-600 hover:bg-purple-100"}`}>
-          Chờ duyệt <span className="font-medium ml-1">{stats.pending}</span>
-        </button>
-        <button onClick={() => handleFilterChange("approved")}
-          className={`px-3 py-1.5 rounded-lg transition ${filter === "approved" ? "bg-green-600 text-white" : "bg-green-50 text-green-600 hover:bg-green-100"}`}>
-          Đã duyệt <span className="font-medium ml-1">{stats.approved}</span>
-        </button>
-        <button onClick={() => handleFilterChange("rejected")}
-          className={`px-3 py-1.5 rounded-lg transition ${filter === "rejected" ? "bg-red-600 text-white" : "bg-red-50 text-red-600 hover:bg-red-100"}`}>
-          Từ chối <span className="font-medium ml-1">{stats.rejected}</span>
-        </button>
-        <div className="flex-1" />
-        <button onClick={loadSubmissions} disabled={loading}
-          className="px-3 py-1.5 rounded-lg bg-gray-100 text-gray-500 hover:bg-gray-200 transition disabled:opacity-50">
-          <RefreshCw size={13} className={`inline mr-1 ${loading ? "animate-spin" : ""}`} />
-          Làm mới
-        </button>
-      </div>
-
-      {error && (
-        <div className="mb-3 rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">{error}</div>
-      )}
-
-      {/* Loading */}
-      {loading && (
-        <div className="text-center py-12 text-xs text-gray-400">Đang tải...</div>
-      )}
-
-      {/* Empty */}
-      {!loading && submissions.length === 0 && (
-        <div className="text-center py-12 text-xs text-gray-400">
-          {filter === "all"
-            ? "Chưa có dữ liệu Agent nào. Tải script Agent từ trang chi tiết khách hàng."
-            : "Không có dữ liệu ở trạng thái này"}
+    <div className="min-h-screen bg-gray-50">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {/* Header */}
+        <div className="mb-6">
+          <h1 className="text-xl font-bold text-gray-900">Cập nhật Agent</h1>
+          <p className="text-sm text-gray-400 mt-1">
+            Dữ liệu thiết bị gửi về từ Agent Script tại khách hàng
+          </p>
         </div>
-      )}
 
-      {/* Submissions list */}
-      {!loading && submissions.length > 0 && (
-        <>
-          <div className="space-y-1.5">
-            {submissions.map(s => {
-              const cfg = statusCfg[s.status] || statusCfg.pending;
+        {/* Stats cards */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
+          {statFilters.map(s => (
+            <button key={s.key} onClick={() => handleFilterChange(s.key)}
+              className={`relative rounded-xl border p-4 text-left transition-all ${
+                s.active
+                  ? s.color === "purple" ? "border-purple-200 bg-purple-50 ring-1 ring-purple-200"
+                    : s.color === "green" ? "border-green-200 bg-green-50 ring-1 ring-green-200"
+                    : s.color === "red" ? "border-red-200 bg-red-50 ring-1 ring-red-200"
+                    : "border-gray-300 bg-white ring-1 ring-gray-300"
+                  : "border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm"
+              }`}>
+              <div className="flex items-center justify-between mb-1">
+                <span className={`text-[11px] font-medium ${
+                  s.active
+                    ? s.color === "purple" ? "text-purple-700"
+                      : s.color === "green" ? "text-green-700"
+                      : s.color === "red" ? "text-red-700"
+                      : "text-gray-700"
+                    : "text-gray-500"
+                }`}>{s.label}</span>
+                <div className={`w-2 h-2 rounded-full ${
+                  s.color === "purple" ? "bg-purple-400"
+                    : s.color === "green" ? "bg-green-400"
+                    : s.color === "red" ? "bg-red-400"
+                    : "bg-gray-400"
+                }`} />
+              </div>
+              <span className={`text-2xl font-bold ${
+                s.active
+                  ? s.color === "purple" ? "text-purple-800"
+                    : s.color === "green" ? "text-green-800"
+                    : s.color === "red" ? "text-red-800"
+                    : "text-gray-900"
+                  : "text-gray-900"
+              }`}>{s.count}</span>
+            </button>
+          ))}
+        </div>
 
-              return (
-                <Link
-                  key={s.id}
-                  href={s.status === "pending" ? `/agent-updates/${s.id}` : `/customers/${s.customerId}`}
-                  className="flex items-center gap-3 px-4 py-3 rounded-lg border border-gray-200 bg-white hover:border-gray-300 transition group"
-                >
-                  {/* Icon */}
-                  <div className={`w-8 h-8 rounded-lg ${cfg.bg} flex items-center justify-center shrink-0`}>
-                    <Monitor size={15} className={cfg.color} />
-                  </div>
-
-                  {/* Info */}
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[13px] font-medium text-gray-900 truncate">
-                        {s.customerName || "Đã xóa"}
-                      </span>
-                      <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium ${cfg.color} ${cfg.bg}`}>
-                        {cfg.label}
-                      </span>
-                      {s.deviceCount > 0 && (
-                        <span className="text-[10px] text-gray-400">
-                          {s.deviceCount} thiết bị
-                        </span>
-                      )}
-                      {s.deviceCount === 0 && s.status === "approved" && (
-                        <span className="text-[10px] text-blue-500">Tự động</span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2 mt-0.5 text-[10px] text-gray-400">
-                      <span>{new Date(s.createdAt).toLocaleDateString("vi-VN")}</span>
-                    </div>
-                  </div>
-
-                  {/* Action */}
-                  <div className="shrink-0 flex items-center gap-2">
-                    {s.status === "pending" ? (
-                      <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-purple-600 text-white text-[11px] font-medium group-hover:bg-purple-700 transition">
-                        <Eye size={12} />
-                        Xem & duyệt
-                      </span>
-                    ) : (
-                      <ChevronRight size={14} className="text-gray-300 group-hover:text-gray-500 transition" />
-                    )}
-                  </div>
-                </Link>
-              );
-            })}
+        {/* Toolbar */}
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2 text-xs text-gray-400">
+            <List size={13} />
+            <span>Hiện <strong className="text-gray-600">{submissions.length}</strong> / {total} kết quả</span>
           </div>
-
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <div className="flex items-center justify-center gap-2 mt-4">
-              <button
-                onClick={() => setPage(p => Math.max(1, p - 1))}
-                disabled={page <= 1}
-                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed transition"
-              >
-                <ChevronLeft size={13} /> Trước
-              </button>
-
-              {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
-                // Show pages around current
-                let pageNum: number;
-                if (totalPages <= 7) {
-                  pageNum = i + 1;
-                } else if (page <= 4) {
-                  pageNum = i + 1;
-                } else if (page >= totalPages - 3) {
-                  pageNum = totalPages - 6 + i;
-                } else {
-                  pageNum = page - 3 + i;
-                }
-                return (
-                  <button
-                    key={pageNum}
-                    onClick={() => setPage(pageNum)}
-                    className={`w-7 h-7 rounded-lg text-xs font-medium transition ${
-                      page === pageNum
-                        ? "bg-gray-900 text-white"
-                        : "text-gray-500 hover:bg-gray-100"
-                    }`}
-                  >
-                    {pageNum}
-                  </button>
-                );
-              })}
-
-              <button
-                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                disabled={page >= totalPages}
-                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed transition"
-              >
-                Sau <ChevronRight size={13} />
-              </button>
-            </div>
-          )}
-        </>
-      )}
-
-      {/* Instructions */}
-      <div className="mt-8 p-4 rounded-xl border border-gray-200 bg-white">
-        <div className="flex items-center gap-2 mb-2">
-          <Download size={16} className="text-primary" />
-          <h3 className="text-sm font-semibold text-gray-900">Hướng dẫn triển khai Agent</h3>
+          <button onClick={loadSubmissions} disabled={loading}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-xs text-gray-500 hover:bg-gray-50 transition disabled:opacity-50">
+            <RefreshCw size={12} className={loading ? "animate-spin" : ""} />
+            Làm mới
+          </button>
         </div>
-        <ol className="space-y-1 text-xs text-gray-500 list-decimal list-inside">
-          <li>Vào trang <Link href="/customers" className="text-blue-600 hover:underline">Khách hàng</Link>, chọn khách hàng cần thu thập</li>
-          <li>Vào tab <strong>Agent</strong>, nhấn <strong>Tải Script</strong></li>
-          <li>Chạy file <code className="bg-gray-100 px-1 rounded text-[10px]">.bat</code> với quyền Administrator trên máy khách</li>
-          <li>Dữ liệu hiện tại <strong>Chờ duyệt</strong> để xem xét và xác nhận</li>
-        </ol>
+
+        {error && (
+          <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-4 text-xs text-red-700">{error}</div>
+        )}
+
+        {/* Loading */}
+        {loading && (
+          <div className="space-y-2">
+            {[1,2,3,4,5].map(i => (
+              <div key={i} className="h-20 bg-white rounded-xl border border-gray-200 animate-pulse" />
+            ))}
+          </div>
+        )}
+
+        {/* Empty */}
+        {!loading && submissions.length === 0 && (
+          <div className="text-center py-16 bg-white rounded-xl border border-gray-200">
+            <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-3">
+              <Monitor size={20} className="text-gray-300" />
+            </div>
+            <p className="text-sm text-gray-500 font-medium">
+              {filter === "all" ? "Chưa có dữ liệu Agent" : "Không có dữ liệu ở trạng thái này"}
+            </p>
+            <p className="text-xs text-gray-400 mt-1">
+              Tải script Agent từ trang chi tiết khách hàng để bắt đầu
+            </p>
+          </div>
+        )}
+
+        {/* Submissions list */}
+        {!loading && submissions.length > 0 && (
+          <>
+            <div className="space-y-2">
+              {submissions.map(s => (
+                <SubmissionRow key={s.id} submission={s} />
+              ))}
+            </div>
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-center gap-1.5 mt-5">
+                <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page <= 1}
+                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium text-gray-500 bg-white border border-gray-200 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition">
+                  <ChevronLeft size={13} /> Trước
+                </button>
+                {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
+                  let pn: number;
+                  if (totalPages <= 7) pn = i + 1;
+                  else if (page <= 4) pn = i + 1;
+                  else if (page >= totalPages - 3) pn = totalPages - 6 + i;
+                  else pn = page - 3 + i;
+                  return (
+                    <button key={pn} onClick={() => setPage(pn)}
+                      className={`w-8 h-8 rounded-lg text-xs font-medium transition ${
+                        page === pn ? "bg-gray-900 text-white" : "text-gray-500 bg-white border border-gray-200 hover:bg-gray-50"
+                      }`}>{pn}</button>
+                  );
+                })}
+                <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page >= totalPages}
+                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium text-gray-500 bg-white border border-gray-200 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition">
+                  Sau <ChevronRight size={13} />
+                </button>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* Instructions */}
+        <div className="mt-8 rounded-xl border border-gray-200 bg-white p-5">
+          <div className="flex items-center gap-2.5 mb-3">
+            <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+              <Download size={15} className="text-primary" />
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-gray-900">Hướng dẫn triển khai Agent</h3>
+              <p className="text-[11px] text-gray-400">Các bước cài đặt Agent tại khách hàng</p>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            {[
+              { step: "1", title: "Chọn khách hàng", desc: "Vào trang Khách hàng, chọn khách hàng cần thu thập" },
+              { step: "2", title: "Tải Script", desc: "Vào tab Agent, chọn chế độ và tải Script" },
+              { step: "3", title: "Chạy trên máy khách", desc: "Chạy file .bat với quyền Administrator" },
+              { step: "4", title: "Duyệt kết quả", desc: "Dữ liệu hiện tại Cập nhật Agent để xem xét" },
+            ].map(s => (
+              <div key={s.step} className="flex items-start gap-2.5 p-3 rounded-lg bg-gray-50">
+                <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-[11px] font-bold text-primary shrink-0">{s.step}</div>
+                <div>
+                  <p className="text-xs font-semibold text-gray-700">{s.title}</p>
+                  <p className="text-[10px] text-gray-400 mt-0.5">{s.desc}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
+  );
+}
+
+/* ===== Submission Row ===== */
+const statusStyle: Record<string, { label: string; color: string; bg: string; dot: string }> = {
+  pending: { label: "Chờ duyệt", color: "text-purple-700", bg: "bg-purple-100", dot: "bg-purple-500" },
+  approved: { label: "Đã duyệt", color: "text-green-700", bg: "bg-green-100", dot: "bg-green-500" },
+  rejected: { label: "Từ chối", color: "text-red-700", bg: "bg-red-100", dot: "bg-red-500" },
+};
+
+function SubmissionRow({ submission: s }: { submission: Submission }) {
+  const cfg = statusStyle[s.status] || statusStyle.pending;
+  const isPending = s.status === "pending";
+  const isAutoUpdate = s.deviceCount === 0 && s.status === "approved";
+
+  return (
+    <Link
+      href={isPending ? `/agent-updates/${s.id}` : `/customers/${s.customerId}`}
+      className="group block rounded-xl border border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm transition-all"
+    >
+      <div className="flex items-center gap-4 px-5 py-4">
+        {/* Icon */}
+        <div className={`w-10 h-10 rounded-xl ${cfg.bg} flex items-center justify-center shrink-0`}>
+          <Monitor size={18} className={cfg.color} />
+        </div>
+
+        {/* Info */}
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <span className="text-sm font-semibold text-gray-900 truncate max-w-[300px]">
+              {s.customerName || "Đã xóa"}
+            </span>
+            <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium ${cfg.color} ${cfg.bg}`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
+              {cfg.label}
+            </span>
+            {s.deviceCount > 0 && (
+              <span className="text-[11px] text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
+                {s.deviceCount} thiết bị
+              </span>
+            )}
+            {isAutoUpdate && (
+              <span className="text-[11px] text-blue-500 bg-blue-50 px-2 py-0.5 rounded-full">
+                Tự động
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2 mt-1 text-[11px] text-gray-400">
+            <Clock size={11} />
+            <span>{new Date(s.createdAt).toLocaleDateString("vi-VN", {
+              day: "2-digit", month: "2-digit", year: "numeric",
+              hour: "2-digit", minute: "2-digit",
+            })}</span>
+          </div>
+        </div>
+
+        {/* Action */}
+        <div className="shrink-0">
+          {isPending ? (
+            <span className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gray-900 text-white text-xs font-medium group-hover:bg-gray-800 transition shadow-sm">
+              <Eye size={13} /> Duyệt
+            </span>
+          ) : (
+            <div className="flex items-center gap-1 text-xs text-gray-300 group-hover:text-gray-500 transition">
+              <span>Chi tiết</span>
+              <ChevronRight size={14} />
+            </div>
+          )}
+        </div>
+      </div>
+    </Link>
   );
 }

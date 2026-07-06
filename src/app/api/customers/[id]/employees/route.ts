@@ -8,7 +8,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const { id } = await params;
   const body = await req.json();
 
-  const { customerId, id: _id, createdAt, updatedAt, customer, employee, ...clean } = body;
+  const { customerId, id: _id, createdAt, updatedAt, customer, employee, employeeId, ...clean } = body;
   const employeeRec = await prisma.customerEmployee.create({
     data: { ...clean, customer: { connect: { id } } },
   });
