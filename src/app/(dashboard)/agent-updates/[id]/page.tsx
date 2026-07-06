@@ -6,7 +6,7 @@ import {
   ArrowLeft, Check, X, AlertTriangle, Monitor, Printer, HelpCircle,
   ChevronDown, ChevronRight, UserPlus, Users,
   User, Briefcase, GraduationCap, AtSign, Phone,
-  Plus, Laptop, Server, RefreshCw, Search,
+  Plus, Laptop, Server, RefreshCw, Search, Wifi, HardDrive,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -33,6 +33,55 @@ type Employee = {
   position?: string | null;
   department?: string | null;
 };
+
+/* ===== Virtual printer names (loại trừ khỏi gán nhân viên) ===== */
+const VIRTUAL_PRINTER_NAMES = [
+  "microsoft print to pdf", "microsoft xps document writer",
+  "fax", "send to onenote", "onenote", "snagit",
+  "adobe pdf", "cute pdf writer", "pdfcreator",
+  "doro pdf", "bullzip pdf printer", "do pdf",
+  "universal print", "microsoft print to",
+  "anydesk", "foxit printer", "foxit pdf printer",
+  "pdf24", "pdf architect", "nova pdf", "pdf-xchange",
+  "epson pdf", "canon pdf", "hp pdf",
+  "microsoft print to pdf",
+  "virtual printer", "software printer",
+];
+
+function isVirtualPrinter(name: string): boolean {
+  return VIRTUAL_PRINTER_NAMES.some(v => name.toLowerCase().includes(v));
+}
+
+function isNetworkPrinter(parsed: Record<string, unknown>): boolean {
+  const port = String(parsed.ipAddress || "").toLowerCase();
+  const notes = String(parsed.notes || "").toLowerCase();
+  // Port là IP address
+  if (/^\d+\.\d+\.\d+\.\d+/.test(port)) return true;
+  if (port.includes("wsd-") || port.includes("wsd")) return true;
+  if (notes.includes("mạng") || notes.includes("network") || notes.includes("tcp/ip")) return true;
+  // Kiểm tra trong componentsJson
+  try {
+    const comps = parsed.componentsJson ? JSON.parse(parsed.componentsJson as string) : null;
+    if (comps?.network === true || comps?.shared === true) return true;
+  } catch { /* skip */ }
+  return false;
+}
+
+function isUsbPrinter(parsed: Record<string, unknown>): boolean {
+  const port = String(parsed.ipAddress || "").toLowerCase();
+  const name = String(parsed.name || "").toLowerCase();
+  if (isVirtualPrinter(name)) return false;
+  if (isNetworkPrinter(parsed)) return false;
+  return true; // Mặc định coi là USB/local nếu không phải network hay virtual
+}
+
+/** Kiểm tra thiết bị có cho phép gán nhân viên không */
+function canAssignEmployee(type: string, parsed: Record<string, unknown>): boolean {
+  if (["computer","desktop","laptop","server","aio","tablet"].includes(type)) return true;
+  if (type === "printer") return isUsbPrinter(parsed);
+  if (type === "monitor") return true;
+  return false;
+}
 
 /* ===== Helpers ===== */
 function deviceIcon(type: string, size = 14) {
@@ -74,6 +123,7 @@ function DeviceCard({
   const isUpdate = match.found;
   const type = (d.deviceType as string) || "computer";
   const isComputer = ["computer","desktop","laptop","server","aio","tablet"].includes(type);
+  const showEmployeeSelect = canAssignEmployee(type, d);
   const [showSpecs, setShowSpecs] = useState(false);
 
   return (
@@ -124,12 +174,24 @@ function DeviceCard({
                   Đã có trong danh sách — sẽ cập nhật thông tin
                 </div>
               )}
+              {type === "printer" && isVirtualPrinter(fmt(d.name)) && (
+                <div className="inline-flex items-center gap-1 text-[10px] text-red-500 bg-red-50/80 rounded-md px-2 py-0.5 border border-red-200/50">
+                  <X size={10} />
+                  Máy in ảo — không gán người dùng
+                </div>
+              )}
+              {type === "printer" && !isVirtualPrinter(fmt(d.name)) && (
+                <div className="inline-flex items-center gap-1 text-[10px] text-sky-600 bg-sky-50/80 rounded-md px-2 py-0.5 border border-sky-200/50">
+                  {isNetworkPrinter(d) ? <Wifi size={10} /> : <HardDrive size={10} />}
+                  {isNetworkPrinter(d) ? "Mạng" : "USB / Local"}
+                </div>
+              )}
             </div>
           </div>
 
           {/* Actions */}
           <div className="flex items-center gap-1.5 shrink-0">
-            {isComputer && (
+            {showEmployeeSelect && (
               <EmployeeSelect
                 employees={employees} value={assignedEmployeeId}
                 onChange={onAssignmentChange} onAdd={onAddEmployee} />
@@ -384,8 +446,29 @@ export default function SubmissionReviewPage({ params }: { params: Promise<{ id:
   const assignedCount = useMemo(() => Object.values(assignments).filter(Boolean).length, [assignments]);
 
   const handleAssignmentChange = useCallback((index: number, employeeId: string | null) => {
-    setAssignments(prev => ({ ...prev, [index]: employeeId }));
-  }, []);
+    setAssignments(prev => {
+      const next = { ...prev, [index]: employeeId };
+      // Auto-propagate: gán employee cho các thiết bị cùng đợt thu thập
+      if (reviewData && employeeId) {
+        const device = reviewData.devices[index];
+        const parentId = device?.parsed?.deviceId as string | undefined;
+        if (parentId) {
+          reviewData.devices.forEach((d, i) => {
+            if (i === index) return;
+            const childParentId = d.parsed?.parentDeviceId as string | undefined;
+            if (childParentId === parentId) {
+              const childType = (d.parsed?.deviceType as string) || "";
+              // Chỉ gán cho monitor hoặc printer USB
+              if (canAssignEmployee(childType, d.parsed)) {
+                next[i] = employeeId;
+              }
+            }
+          });
+        }
+      }
+      return next;
+    });
+  }, [reviewData]);
 
   const handleOpenAddEmployee = useCallback((index: number) => {
     setAddModalDeviceIdx(index);
@@ -637,8 +720,9 @@ export default function SubmissionReviewPage({ params }: { params: Promise<{ id:
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
                   {otherDevices.map(({ d, i }) => (
                     <DeviceCard key={i} device={d} index={i} checked={selected.has(i)} onToggle={() => toggleDevice(i)}
-                      employees={employees} assignedEmployeeId={null}
-                      onAssignmentChange={() => {}} onAddEmployee={() => {}} />
+                      employees={employees} assignedEmployeeId={assignments[i] ?? null}
+                      onAssignmentChange={(empId) => handleAssignmentChange(i, empId)}
+                      onAddEmployee={() => handleOpenAddEmployee(i)} />
                   ))}
                 </div>
               </section>
@@ -659,6 +743,38 @@ export default function SubmissionReviewPage({ params }: { params: Promise<{ id:
             ) : null}
           </>
         ) : null}
+
+        {/* ── Summary widget ── */}
+        {reviewData && (
+          <Card>
+            <CardContent className="px-5 py-4">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
+                <div>
+                  <p className="text-muted-foreground mb-0.5">Tổng thiết bị</p>
+                  <p className="text-lg font-bold text-gray-900">{reviewData.devices.length}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground mb-0.5">Đã gán người dùng</p>
+                  <p className="text-lg font-bold text-gray-900">{assignedCount}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground mb-0.5">Chưa gán</p>
+                  <p className="text-lg font-bold text-amber-600">{reviewData.devices.length - assignedCount}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground mb-0.5">Máy in ảo (bỏ qua)</p>
+                  <p className="text-lg font-bold text-muted-foreground">
+                    {reviewData.devices.filter(d => {
+                      const t = (d.parsed.deviceType as string) || "";
+                      const n = fmt(d.parsed.name);
+                      return t === "printer" && isVirtualPrinter(n);
+                    }).length}
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* ── Bottom bar ── */}
         <div className="sticky bottom-4 z-10 bg-white/90 backdrop-blur-md rounded-2xl border border-border/80 px-5 py-3.5 flex items-center justify-between shadow-lg">
