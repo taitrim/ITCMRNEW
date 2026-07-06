@@ -18,7 +18,7 @@ interface VideoEntry { name?: string; chipset?: string; memory?: number; resolut
 interface MonitorEntry { caption?: string; manufacturer?: string; serial?: string; description?: string; base64?: string; }
 interface NetworkEntry { description?: string; mac?: string; ipaddress?: string; ipmask?: string; ipgateway?: string; ipdhcp?: string; ipsubnet?: string; speed?: string; status?: string; type?: string; virtualdev?: boolean; pciid?: string; pnpdeviceid?: string; }
 interface SoftwareEntry { name?: string; version?: string; publisher?: string; }
-interface PrinterEntry { name?: string; driver?: string; port?: string; network?: boolean; shared?: boolean; status?: string; resolution?: string; }
+interface PrinterEntry { name?: string; driver?: string; port?: string; network?: boolean; shared?: boolean; status?: string; resolution?: string; color?: boolean; duplex?: boolean; pages_total?: number; manufacturer?: string; model?: string; _extracted?: { isColor?: boolean; isDuplex?: boolean; resolution?: string; pageTotal?: number; driver?: string; manufacturer?: string; modelName?: string; }; }
 interface AntivirusEntry { name?: string; company?: string; enabled?: boolean; uptodate?: boolean; base_version?: string; }
 interface FirewallEntry { profile?: string; status?: string; }
 interface SoundEntry { caption?: string; description?: string; manufacturer?: string; name?: string; }
@@ -186,6 +186,22 @@ function OverviewSection({ c }: { c: Components }) {
           <div className="text-gray-500 text-[10px]">{c.operatingsystem?.arch || ""}</div>
         </div>
       </div>
+      {/* Danh sach tung o dia */}
+      {c.storages && c.storages.length > 0 && (
+        <div className="mt-2 space-y-1">
+          <div className="text-[9px] text-gray-400 uppercase tracking-wider font-medium px-1">Chi tiết ổ đĩa</div>
+          {c.storages.map((s, i) => (
+            <div key={i} className="flex items-center gap-2 px-2 py-1 bg-gray-50 rounded">
+              <span className="text-[10px] text-gray-400 w-5 shrink-0">{i + 1}.</span>
+              <div className="flex-1 min-w-0">
+                <div className="text-[11px] text-gray-800 font-medium truncate">{s.model || s.name || "?"}</div>
+                <div className="text-[9px] text-gray-400">{s.disksize ? fmtMb(s.disksize) : "?"}{s.interface ? ` · ${s.interface}` : ""}{s.type ? ` · ${s.type}` : ""}</div>
+              </div>
+              {s.disksize && <div className="text-[11px] text-gray-600 font-semibold shrink-0">{fmtMb(s.disksize)}</div>}
+            </div>
+          ))}
+        </div>
+      )}
     </SectionCard>
   );
 }
@@ -689,19 +705,35 @@ function PrintersSection({ printers }: { printers: PrinterEntry[] }) {
   return (
     <SectionCard icon="🖨️" title="Máy in" count={printers.length}>
       <div className="space-y-1.5">
-        {printers.map((p, i) => (
-          <div key={i} className="text-[11px] py-1.5 px-2 bg-gray-50 rounded-lg">
-            <div className="flex items-center justify-between">
-              <span className="text-gray-700 font-medium">{p.name || `Máy in ${i + 1}`}</span>
-              <span className="text-gray-500">{p.status || ""} {p.network ? "(Mạng)" : "(Local)"}</span>
+        {printers.map((p, i) => {
+          // Check _extracted data from enhanced printer parsing
+          const ext = p._extracted;
+          const isColor = p.color ?? ext?.isColor ?? null;
+          const isDuplex = p.duplex ?? ext?.isDuplex ?? null;
+          const pages = p.pages_total ?? ext?.pageTotal;
+          const res = p.resolution || ext?.resolution || "";
+          return (
+            <div key={i} className="text-[11px] py-1.5 px-2 bg-gray-50 rounded-lg">
+              <div className="flex items-center justify-between">
+                <span className="text-gray-700 font-medium">{p.name || `Máy in ${i + 1}`}</span>
+                <span className="flex items-center gap-1">
+                  {p.network && <span className="text-[10px] text-gray-400">Mạng</span>}
+                  {p.status && <span className="text-[10px] text-gray-500">· {p.status}</span>}
+                </span>
+              </div>
+              <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-gray-400 mt-0.5">
+                {p.driver && <span>Driver: {p.driver}</span>}
+                {p.port && <span>Cổng: {p.port}</span>}
+                {isColor === true && <span className="text-blue-600">Màu</span>}
+                {isColor === false && <span>Đen trắng</span>}
+                {isDuplex === true && <span>2 mặt</span>}
+                {res && <span>{res} dpi</span>}
+                {pages !== undefined && pages !== null && <span>Đã in: <strong>{pages.toLocaleString()}</strong> trang</span>}
+                {p.shared && <span>Chia sẻ</span>}
+              </div>
             </div>
-            <div className="flex gap-3 text-[10px] text-gray-400 mt-0.5">
-              {p.driver && <span>Driver: {p.driver}</span>}
-              {p.port && <span>Port: {p.port}</span>}
-              {p.shared && <span>Chia sẻ</span>}
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </SectionCard>
   );

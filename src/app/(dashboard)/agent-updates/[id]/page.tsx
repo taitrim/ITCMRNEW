@@ -4,7 +4,7 @@ import { use, useState, useCallback, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft, Check, X, AlertTriangle, Monitor, Printer, HelpCircle,
-  ChevronDown, ChevronRight, UserPlus, Users
+  ChevronDown, ChevronRight, UserPlus, Users, FileText
 } from "lucide-react";
 import DeviceComponentsPanel from "@/components/DeviceComponentsPanel";
 
@@ -127,6 +127,69 @@ function NewEmployeeForm({
           Tạo & gán
         </button>
       </div>
+    </div>
+  );
+}
+
+/* ===== Printer Detail Panel ===== */
+function PrinterDetailPanel({ componentsJson }: { componentsJson: string }) {
+  let data: any = null;
+  try { data = JSON.parse(componentsJson); } catch { return null; }
+  if (!data) return null;
+
+  // Use _extracted data from enhanced parser, fallback to raw fields
+  const ext = data._extracted;
+  const name = data.name || "";
+  const manufacturer = ext?.manufacturer || data.manufacturer || "";
+  const modelName = ext?.modelName || data.model || "";
+  const serial = data.serial || "";
+  const port = data.port || "";
+  const driver = ext?.driver || data.driver || "";
+  const isColor = ext?.isColor ?? data.color ?? null;
+  const isDuplex = ext?.isDuplex ?? data.duplex ?? null;
+  const resolution = ext?.resolution || data.resolution || "";
+  const pageTotal = ext?.pageTotal ?? data.pages_total ?? data.pages ?? null;
+  const isNetwork = data.network === true;
+  const isShared = data.shared === true;
+  const status = data.status || "";
+  const location = data.location || "";
+
+  return (
+    <div className="space-y-2 text-[11px]">
+      {/* Header */}
+      <div className="flex items-center gap-2 text-gray-700 font-medium">
+        <Printer size={14} />
+        <span>{manufacturer ? `${manufacturer} ${modelName}` : name}</span>
+      </div>
+
+      {/* Info grid */}
+      <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 bg-gray-50 rounded-lg p-3">
+        <DetailRow label="Tên máy in" value={name} />
+        {serial && <DetailRow label="Serial" value={serial} />}
+        {manufacturer && <DetailRow label="Hãng" value={manufacturer} />}
+        {modelName && <DetailRow label="Model" value={modelName} />}
+        {port && <DetailRow label="Cổng" value={port} />}
+        {driver && <DetailRow label="Driver" value={driver.replace(/\\n/g, "; ")} />}
+        {status && <DetailRow label="Trạng thái" value={status} />}
+        {location && <DetailRow label="Vị trí" value={location} />}
+        <DetailRow label="Màu sắc" value={isColor === true ? "Có" : isColor === false ? "Không" : "—"} />
+        <DetailRow label="In 2 mặt" value={isDuplex === true ? "Có" : isDuplex === false ? "Không" : "—"} />
+        {resolution && <DetailRow label="Độ phân giải" value={`${resolution} dpi`} />}
+        {pageTotal !== null && pageTotal !== undefined && (
+          <DetailRow label="Đã in" value={`${Number(pageTotal).toLocaleString()} trang`} />
+        )}
+        <DetailRow label="Kết nối" value={isNetwork ? "Mạng" : "Cục bộ"} />
+        {isShared && <DetailRow label="Chia sẻ" value="Có" />}
+      </div>
+    </div>
+  );
+}
+
+function DetailRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <span className="text-gray-400 w-20 shrink-0">{label}</span>
+      <span className="text-gray-700 truncate">{value}</span>
     </div>
   );
 }
@@ -277,8 +340,22 @@ function DeviceRow({
         )}
       </div>
 
-      {/* Components (if any) */}
-      {componentsJson && (
+      {/* Components / Printer details */}
+      {componentsJson && type === "printer" && (
+        <div className="border-t border-gray-100">
+          <button onClick={() => setShowFullInv(!showFullInv)}
+            className="flex items-center gap-1.5 w-full px-3 py-2 text-[11px] text-gray-500 hover:text-gray-700 hover:bg-gray-50 transition-colors">
+            {showFullInv ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+            {showFullInv ? "Ẩn chi tiết máy in" : "Xem chi tiết máy in"}
+          </button>
+          {showFullInv && (
+            <div className="px-3 pb-3">
+              <PrinterDetailPanel componentsJson={componentsJson} />
+            </div>
+          )}
+        </div>
+      )}
+      {componentsJson && isComputer && (
         <div className="border-t border-gray-100">
           <button onClick={() => setShowFullInv(!showFullInv)}
             className="flex items-center gap-1.5 w-full px-3 py-2 text-[11px] text-gray-500 hover:text-gray-700 hover:bg-gray-50 transition-colors">
