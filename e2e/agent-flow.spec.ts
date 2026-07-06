@@ -32,16 +32,16 @@ test.describe('Agent Flow (customer key-based)', () => {
             operatingsystem: { name: 'Windows', full_name: 'Windows 11 Pro' },
             cpus: [{ name: 'Intel i5' }],
             storages: [{ disksize: 256000 }],
-            networks: [{ ipaddress: '10.0.0.1', macaddr: 'AA:BB:CC:DD:EE:FF' }],
+            networks: [{ ipaddress: '10.0.0.1', macaddr: `AA:BB:CC:${timestamp % 10000}:${Math.floor(timestamp / 10000) % 10000}:FF` }],
             users: [{ LOGIN: 'tester' }],
             printers: [
               {
-                name: 'HP LaserJet Pro M404dw',
+                name: `HP LaserJet Pro ${timestamp}`,
                 manufacturer: 'HP',
-                model: 'LaserJet Pro M404dw',
+                model: `LaserJet Pro ${timestamp}`,
                 serial: `SN-PRN-${timestamp}`,
-                port: 'IP_10.0.0.50',
-                driver: 'HP LaserJet Pro M404dw PCL 6',
+                port: `IP_10.0.0.${timestamp % 100}`,
+                driver: `HP LaserJet Pro M404dw PCL 6 ${timestamp}`,
                 color: false,
                 duplex: true,
                 resolution: '1200x1200',
@@ -72,11 +72,13 @@ test.describe('Agent Flow (customer key-based)', () => {
     const printerDev = rd.devices.find((d: any) => d.parsed.deviceType === 'printer');
     expect(printerDev).toBeTruthy();
     expect(printerDev.parsed.manufacturer).toBe('HP');
+    expect(printerDev.parsed.name).toContain(String(timestamp));
     // color: false → notes không chứa 'màu'
     expect(printerDev.parsed.notes).not.toContain('màu');
     // duplex: true → notes chứa '2 mặt'
     expect(printerDev.parsed.notes).toContain('2 mặt');
     expect(printerDev.parsed.notes).toContain('15420 trang');
+    expect(printerDev.parsed.notes).toContain(String(timestamp));
 
     // Approve both devices
     const approveRes = await api.post(`/api/agent-inventory/submissions/${submissionId}/review`, {
@@ -102,19 +104,20 @@ test.describe('Agent Flow (customer key-based)', () => {
     const custData = await (await api.get(`/api/customers/${customers[0].id}`)).json();
 
     // Submit
+    const ts = Date.now();
     const submitRes = await api.post(
       `/api/agent-inventory/submit?customerId=${custData.id}&key=${custData.agentKey}`,
       {
         data: {
           action: 'inventory',
-          deviceid: `E2E-REJ-${Date.now()}`,
+          deviceid: `E2E-REJ-${ts}`,
           content: {
-            hardware: { name: `REJ-PC-${Date.now()}`, chassis_type: 'desktop', memory: 4096, uuid: `rej-${Date.now()}` },
-            bios: { smanufacturer: 'HP', smodel: 'ProDesk', sserial: `SN-REJ-${Date.now()}` },
+            hardware: { name: `REJ-PC-${ts}`, chassis_type: 'desktop', memory: 4096, uuid: `rej-${ts}` },
+            bios: { smanufacturer: 'HP', smodel: 'ProDesk', sserial: `SN-REJ-${ts}` },
             operatingsystem: { name: 'Windows', full_name: 'Windows 10' },
             cpus: [{ name: 'Intel i3' }],
             storages: [{ disksize: 128000 }],
-            networks: [{ ipaddress: '10.0.0.2', macaddr: '11:22:33:44:55:66' }],
+            networks: [{ ipaddress: '10.0.0.2', macaddr: `11:22:33:${ts % 10000}:${Math.floor(ts / 10000) % 10000}:66` }],
             users: [{ LOGIN: 'rejuser' }],
           },
         },
