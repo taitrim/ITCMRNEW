@@ -85,6 +85,20 @@ export async function POST(
   // Khởi tạo từ _deviceIdMap trong reviewData (devices đã auto-update ở submit)
   const parsedToDbId: Record<string, string> = reviewData._deviceIdMap || {};
 
+  // Lấy customer code để tạo mã tài sản
+  const customer = await prisma.customer.findUnique({
+    where: { id: submission.customerId },
+    select: { code: true },
+  });
+  const customerCode = customer?.code || "KH";
+
+  // Type prefix cho asset tag
+  const assetTypePrefix: Record<string, string> = {
+    computer: "PC", desktop: "PC", laptop: "LT", server: "SRV",
+    printer: "PR", monitor: "MON", network: "NET",
+    phone: "PH", peripheral: "PER", other: "DEV",
+  };
+
   for (const deviceId of devicesToConfirm) {
     const devData = reviewData.devices.find(
       (d: any) => String(d.parsed?.deviceId || `${d.parsed?.serialNumber || d.parsed?.name}`) === deviceId
@@ -155,10 +169,16 @@ export async function POST(
         parsedToDbId[deviceId] = existing.id;
       }
     } else {
-      // CREATE new device
+      // CREATE new device with auto-generated asset tag
+      const prefix = assetTypePrefix[deviceType] || "DEV";
+      const typeCount = await prisma.customerCollectedDevice.count({
+        where: { customerId: submission.customerId, deviceType },
+      });
+      const assetTag = `KH-${customerCode}-${prefix}-${String(typeCount + 1).padStart(3, "0")}`;
       const created = await prisma.customerCollectedDevice.create({
         data: {
           customerId: submission.customerId,
+          assetTag,
           deviceType,
           serialNumber,
           manufacturer,
