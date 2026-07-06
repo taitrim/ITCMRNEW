@@ -82,7 +82,8 @@ export async function POST(
 
   let confirmedCount = 0;
   // Map từ parsed deviceId → DB id (để resolve parentDeviceId đúng)
-  const parsedToDbId: Record<string, string> = {};
+  // Khởi tạo từ _deviceIdMap trong reviewData (devices đã auto-update ở submit)
+  const parsedToDbId: Record<string, string> = reviewData._deviceIdMap || {};
 
   for (const deviceId of devicesToConfirm) {
     const devData = reviewData.devices.find(
