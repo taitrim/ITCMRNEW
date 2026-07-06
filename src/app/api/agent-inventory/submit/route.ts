@@ -100,11 +100,25 @@ function parseMainComputer(
     memory: hw.memory || 0, uuid: hw.uuid || "",
     defaultgateway: hw.defaultgateway || "", dns: hw.dns || "",
     lastloggeduser: hw.lastloggeduser || "",
+    datelastloggeduser: hw.datelastloggeduser || "",
     workgroup: hw.workgroup || "", vmsystem: hw.vmsystem || "",
   };
+  components.totalMemory = hw.memory || 0;
   components.users = users.map((u: any) => ({
     login: u.LOGIN || u.login || "", domain: u.domain || "",
   }));
+
+  // Normalize BIOS fields from GLPI agent format → UI format
+  const biosRaw = content.bios || {};
+  components.bios = {
+    manufacturer: biosRaw.smanufacturer || biosRaw.manufacturer || "",
+    version: biosRaw.sversion || biosRaw.version || "",
+    date: biosRaw.sdate || biosRaw.date || "",
+    system_manufacturer: biosRaw.smanufacturer || "",
+    system_model: biosRaw.smodel || biosRaw.system_model || "",
+    motherboard_manufacturer: biosRaw.bmanufacturer || biosRaw.motherboard_manufacturer || "",
+    motherboard_model: biosRaw.bmodel || biosRaw.motherboard_model || "",
+  };
 
   const deviceType = (hw.chassis_type || "").toLowerCase() === "laptop" ? "laptop" : "computer";
 

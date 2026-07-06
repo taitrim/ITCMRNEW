@@ -65,68 +65,58 @@ function fmt(val: unknown): string {
   return String(val);
 }
 
-/* ===== New Employee Inline Form ===== */
-function NewEmployeeForm({
-  onSave,
-  onCancel,
+/* ===== Employee Assignment UI ===== */
+function EmployeeAssignment({
+  deviceId,
+  deviceName,
+  employees,
+  assignedEmployeeId,
+  onChange,
+  customerId,
 }: {
-  onSave: (data: { firstName: string; lastName: string; email?: string; phone?: string; position?: string; department?: string }) => void;
-  onCancel: () => void;
+  deviceId: string;
+  deviceName: string;
+  employees: Employee[];
+  assignedEmployeeId: string | null;
+  onChange: (employeeId: string | null) => void;
+  customerId: string;
 }) {
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
-  const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
-  const [position, setPosition] = useState("");
-  const [department, setDepartment] = useState("");
+  const [isOpen, setIsOpen] = useState(false);
+  const router = useRouter();
+
+  const assignedEmp = assignedEmployeeId ? employees.find(e => e.id === assignedEmployeeId) : null;
 
   return (
-    <div className="mt-2 p-2.5 bg-gray-50 rounded-lg border border-gray-200 space-y-2">
+    <div className="border-t border-gray-100 px-3 py-2">
       <div className="flex items-center gap-2">
-        <div className="flex-1">
-          <label className="text-[10px] text-gray-400">Tên</label>
-          <input value={firstName} onChange={e => setFirstName(e.target.value)}
-            className="w-full px-2 py-1 text-[11px] border border-gray-200 rounded focus:outline-none focus:border-blue-400" />
-        </div>
-        <div className="flex-1">
-          <label className="text-[10px] text-gray-400">Họ</label>
-          <input value={lastName} onChange={e => setLastName(e.target.value)}
-            className="w-full px-2 py-1 text-[11px] border border-gray-200 rounded focus:outline-none focus:border-blue-400" />
-        </div>
-      </div>
-      <div className="flex items-center gap-2">
-        <div className="flex-1">
-          <label className="text-[10px] text-gray-400">Email</label>
-          <input value={email} onChange={e => setEmail(e.target.value)}
-            className="w-full px-2 py-1 text-[11px] border border-gray-200 rounded focus:outline-none focus:border-blue-400" />
-        </div>
-        <div className="flex-1">
-          <label className="text-[10px] text-gray-400">SĐT</label>
-          <input value={phone} onChange={e => setPhone(e.target.value)}
-            className="w-full px-2 py-1 text-[11px] border border-gray-200 rounded focus:outline-none focus:border-blue-400" />
-        </div>
-      </div>
-      <div className="flex items-center gap-2">
-        <div className="flex-1">
-          <label className="text-[10px] text-gray-400">Chức vụ</label>
-          <input value={position} onChange={e => setPosition(e.target.value)}
-            className="w-full px-2 py-1 text-[11px] border border-gray-200 rounded focus:outline-none focus:border-blue-400" />
-        </div>
-        <div className="flex-1">
-          <label className="text-[10px] text-gray-400">Phòng ban</label>
-          <input value={department} onChange={e => setDepartment(e.target.value)}
-            className="w-full px-2 py-1 text-[11px] border border-gray-200 rounded focus:outline-none focus:border-blue-400" />
-        </div>
-      </div>
-      <div className="flex items-center justify-end gap-2 pt-1">
-        <button onClick={onCancel}
-          className="px-2.5 py-1 text-[10px] text-gray-500 hover:text-gray-700">Huỷ</button>
-        <button onClick={() => onSave({ firstName, lastName, email: email || undefined, phone: phone || undefined, position: position || undefined, department: department || undefined })}
-          disabled={!firstName}
-          className="px-2.5 py-1 text-[10px] font-medium text-white bg-blue-600 rounded hover:bg-blue-700 disabled:opacity-50">
-          Tạo & gán
+        <Users size={12} className="text-gray-400 shrink-0" />
+        <span className="text-[10px] text-gray-400 w-14 shrink-0">Gán cho</span>
+        <select
+          value={assignedEmployeeId || ""}
+          onChange={e => onChange(e.target.value || null)}
+          className="flex-1 px-2 py-1 text-[11px] border border-gray-200 rounded bg-white focus:outline-none focus:border-blue-400"
+        >
+          <option value="">— Chưa gán —</option>
+          {employees.map(emp => (
+            <option key={emp.id} value={emp.id}>
+              {emp.lastName} {emp.firstName}{emp.position ? ` (${emp.position})` : ""}
+            </option>
+          ))}
+        </select>
+        <button
+          onClick={() => window.open(`/customer-employees?customerId=${customerId}`, '_blank')}
+          className="px-2 py-1 text-[10px] text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded transition flex items-center gap-1 whitespace-nowrap"
+        >
+          <UserPlus size={11} /> QL nhân viên
         </button>
       </div>
+      {assignedEmp && (
+        <div className="mt-1 text-[10px] text-green-600 bg-green-50 px-2 py-1 rounded flex items-center gap-1">
+          <Check size={10} />
+          Đã gán: <strong>{assignedEmp.lastName} {assignedEmp.firstName}</strong>
+          {assignedEmp.position && <> · {assignedEmp.position}</>}
+        </div>
+      )}
     </div>
   );
 }
@@ -195,81 +185,18 @@ function DetailRow({ label, value }: { label: string; value: string }) {
 }
 
 /* ===== Employee Assignment UI ===== */
-function EmployeeAssignment({
-  deviceId,
-  deviceName,
-  employees,
-  assignedEmployeeId,
-  newEmployeeFirstName,
-  onChange,
-  onStartNew,
-  onCancelNew,
-  onNewEmployeeSave,
-  showNewForm,
-}: {
-  deviceId: string;
-  deviceName: string;
-  employees: Employee[];
-  assignedEmployeeId: string | null;
-  newEmployeeFirstName: string | null;
-  onChange: (employeeId: string | null) => void;
-  onStartNew: () => void;
-  onCancelNew: () => void;
-  onNewEmployeeSave: (data: { firstName: string; lastName: string; email?: string; phone?: string; position?: string; department?: string }) => void;
-  showNewForm: boolean;
-}) {
-  return (
-    <div className="border-t border-gray-100 px-3 py-2">
-      <div className="flex items-center gap-2">
-        <Users size={12} className="text-gray-400 shrink-0" />
-        <span className="text-[10px] text-gray-400 w-14 shrink-0">Gán cho</span>
-        <select
-          value={assignedEmployeeId || ""}
-          onChange={e => onChange(e.target.value || null)}
-          className="flex-1 px-2 py-1 text-[11px] border border-gray-200 rounded bg-white focus:outline-none focus:border-blue-400"
-        >
-          <option value="">— Chưa gán —</option>
-          {employees.map(emp => (
-            <option key={emp.id} value={emp.id}>
-              {emp.lastName} {emp.firstName}{emp.position ? ` (${emp.position})` : ""}
-            </option>
-          ))}
-        </select>
-        <button onClick={onStartNew}
-          className="px-2 py-1 text-[10px] text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded transition flex items-center gap-1">
-          <UserPlus size={11} /> NV mới
-        </button>
-      </div>
-
-      {newEmployeeFirstName && (
-        <div className="mt-1.5 text-[10px] text-blue-600 bg-blue-50 px-2 py-1 rounded">
-          <Check size={10} className="inline mr-1" />
-          Sẽ tạo nhân viên: <strong>{newEmployeeFirstName}</strong>
-        </div>
-      )}
-
-      {showNewForm && (
-        <NewEmployeeForm onSave={onNewEmployeeSave} onCancel={onCancelNew} />
-      )}
-    </div>
-  );
-}
 
 /* ===== Device Row ===== */
 function DeviceRow({
   device, index, checked, onToggle,
-  employees, assignedEmployeeId, newEmployeeInfo,
-  showNewForm, onAssignmentChange, onStartNewEmployee, onCancelNewEmployee, onNewEmployeeSave,
+  employees, assignedEmployeeId,
+  onAssignmentChange, customerId,
 }: {
   device: ReviewDevice; index: number; checked: boolean; onToggle: () => void;
   employees: Employee[];
   assignedEmployeeId: string | null;
-  newEmployeeInfo: { firstName: string } | null;
-  showNewForm: boolean;
   onAssignmentChange: (employeeId: string | null) => void;
-  onStartNewEmployee: () => void;
-  onCancelNewEmployee: () => void;
-  onNewEmployeeSave: (data: { firstName: string; lastName: string; email?: string; phone?: string; position?: string; department?: string }) => void;
+  customerId: string;
 }) {
   const { parsed, match } = device;
   const type = (parsed.deviceType as string) || "computer";
@@ -278,11 +205,7 @@ function DeviceRow({
   const componentsJson = parsed.componentsJson as string | undefined;
   const deviceId = String(parsed.deviceId || index);
 
-  const employeeLabel = assignedEmployeeId
-    ? employees.find(e => e.id === assignedEmployeeId)
-      ? `${employees.find(e => e.id === assignedEmployeeId)!.lastName} ${employees.find(e => e.id === assignedEmployeeId)!.firstName}`
-      : "Đã chọn"
-    : newEmployeeInfo ? `Mới: ${newEmployeeInfo.firstName}` : null;
+  const assignedEmp = assignedEmployeeId ? employees.find(e => e.id === assignedEmployeeId) : null;
 
   return (
     <div className={`rounded-lg border ${checked ? "border-blue-300 bg-blue-50/40" : "border-gray-200 bg-white"}`}>
@@ -303,10 +226,10 @@ function DeviceRow({
             )}
           </div>
           {isComputer && <div className="text-[10px] text-gray-400 mt-0.5">{fmt(parsed.serialNumber)}</div>}
-          {employeeLabel && (
-            <div className="text-[10px] text-blue-600 mt-0.5">
+          {assignedEmp && (
+            <div className="text-[10px] text-green-600 mt-0.5">
               <Users size={10} className="inline mr-0.5" />
-              {employeeLabel}
+              Đã gán: {assignedEmp.lastName} {assignedEmp.firstName}
             </div>
           )}
         </div>
@@ -370,19 +293,15 @@ function DeviceRow({
         </div>
       )}
 
-      {/* Employee Assignment */}
-      {checked && (
+      {/* Employee Assignment — chỉ cho computer */}
+      {checked && isComputer && (
         <EmployeeAssignment
           deviceId={deviceId}
           deviceName={fmt(parsed.name)}
           employees={employees}
           assignedEmployeeId={assignedEmployeeId}
-          newEmployeeFirstName={newEmployeeInfo?.firstName || null}
           onChange={onAssignmentChange}
-          onStartNew={onStartNewEmployee}
-          onCancelNew={onCancelNewEmployee}
-          onNewEmployeeSave={onNewEmployeeSave}
-          showNewForm={showNewForm}
+          customerId={customerId}
         />
       )}
     </div>
@@ -426,12 +345,6 @@ export default function SubmissionReviewPage({ params }: { params: Promise<{ id:
 
   // Assignment state: deviceIndex -> assigned employee id | null
   const [assignments, setAssignments] = useState<Record<number, string | null>>({});
-  // New employee state: deviceIndex -> employee data to create
-  const [newEmployees, setNewEmployees] = useState<Record<number, {
-    firstName: string; lastName: string; email?: string; phone?: string; position?: string; department?: string;
-  }>>({});
-  // Which device index is showing the new employee form
-  const [showNewFormFor, setShowNewFormFor] = useState<number | null>(null);
 
   // Load submission + employees
   const loadData = useCallback(async () => {
@@ -487,33 +400,9 @@ export default function SubmissionReviewPage({ params }: { params: Promise<{ id:
   // Assignment handlers
   const handleAssignmentChange = useCallback((index: number, employeeId: string | null) => {
     setAssignments(prev => ({ ...prev, [index]: employeeId }));
-    // If switching back to existing employee, clear new employee data for this device
-    if (employeeId) {
-      setNewEmployees(prev => {
-        const next = { ...prev };
-        delete next[index];
-        return next;
-      });
-    }
   }, []);
 
-  const handleStartNewEmployee = useCallback((index: number) => {
-    setShowNewFormFor(index);
-  }, []);
-
-  const handleCancelNewEmployee = useCallback(() => {
-    setShowNewFormFor(null);
-  }, []);
-
-  const handleNewEmployeeSave = useCallback((index: number, data: {
-    firstName: string; lastName: string; email?: string; phone?: string; position?: string; department?: string;
-  }) => {
-    setNewEmployees(prev => ({ ...prev, [index]: data }));
-    setAssignments(prev => ({ ...prev, [index]: null })); // Clear existing assignment
-    setShowNewFormFor(null);
-  }, []);
-
-  // Approve — send assignments + newEmployees
+  // Approve — send assignments
   const handleApprove = useCallback(async () => {
     if (!submission || !reviewData || selected.size === 0) return;
     setSubmitting(true);
@@ -522,24 +411,16 @@ export default function SubmissionReviewPage({ params }: { params: Promise<{ id:
 
       // Build assignments map using deviceId strings
       const assignmentsMap: Record<string, string | null> = {};
-      const newEmployeesMap: Record<string, {
-        firstName: string; lastName: string; email?: string; phone?: string; position?: string; department?: string;
-      }> = {};
 
       for (const i of selected) {
         const devId = String(reviewData.devices[i].parsed.deviceId || i);
-
-        // If there's a new employee for this device, include in newEmployees
-        if (newEmployees[i]) {
-          newEmployeesMap[devId] = newEmployees[i];
-        } else if (assignments[i] !== undefined) {
+        if (assignments[i] !== undefined) {
           assignmentsMap[devId] = assignments[i];
         }
       }
 
       const body: Record<string, unknown> = { action: "approve", selectedDevices: deviceIds };
       if (Object.keys(assignmentsMap).length > 0) body.assignments = assignmentsMap;
-      if (Object.keys(newEmployeesMap).length > 0) body.newEmployees = newEmployeesMap;
 
       const res = await fetch(`/api/agent-inventory/submissions/${id}/review`, {
         method: "POST",
@@ -554,7 +435,7 @@ export default function SubmissionReviewPage({ params }: { params: Promise<{ id:
     } finally {
       setSubmitting(false);
     }
-  }, [submission, reviewData, selected, id, assignments, newEmployees]);
+  }, [submission, reviewData, selected, id, assignments]);
 
   // Reject
   const handleReject = useCallback(async () => {
@@ -580,10 +461,10 @@ export default function SubmissionReviewPage({ params }: { params: Promise<{ id:
   const assignedCount = useMemo(() => {
     let count = 0;
     for (const i of selected) {
-      if (assignments[i] || newEmployees[i]) count++;
+      if (assignments[i]) count++;
     }
     return count;
-  }, [selected, assignments, newEmployees]);
+  }, [selected, assignments]);
 
   if (loading) return <div className="flex items-center justify-center min-h-[50vh]"><div className="text-sm text-gray-400">Đang tải...</div></div>;
 
@@ -675,12 +556,8 @@ export default function SubmissionReviewPage({ params }: { params: Promise<{ id:
                 key={i} device={d} index={i} checked={selected.has(i)} onToggle={() => toggleDevice(i)}
                 employees={employees}
                 assignedEmployeeId={assignments[i] ?? null}
-                newEmployeeInfo={newEmployees[i] ? { firstName: newEmployees[i].firstName } : null}
-                showNewForm={showNewFormFor === i}
                 onAssignmentChange={(empId) => handleAssignmentChange(i, empId)}
-                onStartNewEmployee={() => handleStartNewEmployee(i)}
-                onCancelNewEmployee={handleCancelNewEmployee}
-                onNewEmployeeSave={(data) => handleNewEmployeeSave(i, data)}
+                customerId={submission?.customerId || ""}
               />
             ))}
 
@@ -703,13 +580,9 @@ export default function SubmissionReviewPage({ params }: { params: Promise<{ id:
               <DeviceRow
                 key={i} device={d} index={i} checked={selected.has(i)} onToggle={() => toggleDevice(i)}
                 employees={employees}
-                assignedEmployeeId={assignments[i] ?? null}
-                newEmployeeInfo={newEmployees[i] ? { firstName: newEmployees[i].firstName } : null}
-                showNewForm={showNewFormFor === i}
-                onAssignmentChange={(empId) => handleAssignmentChange(i, empId)}
-                onStartNewEmployee={() => handleStartNewEmployee(i)}
-                onCancelNewEmployee={handleCancelNewEmployee}
-                onNewEmployeeSave={(data) => handleNewEmployeeSave(i, data)}
+                assignedEmployeeId={null}
+                onAssignmentChange={() => {}}
+                customerId={submission?.customerId || ""}
               />
             ))}
         </div>
