@@ -133,21 +133,55 @@ function parsePrinters(content: Record<string, any>, parentDeviceId: string): De
   for (const p of printers) {
     if (isVirtualPrinter(p)) continue;
     const name = p.name || "Unknown Printer";
-    const manufacturer = (p.name || "").split(" ")[0] || "";
+    const manufacturer = p.manufacturer || (p.name || "").split(" ")[0] || "";
+    const modelName = p.model || p.name || "";
     const serial = p.serial || "";
     const port = p.port || "";
+    const driver = p.driver || "";
+    const isColor = p.color === true || p.color === "true" || p.color === "1";
+    const isDuplex = p.duplex === true || p.duplex === "true" || p.duplex === "1";
+    const resolution = p.resolution || "";
+    const pageTotal = p.pages_total || p.pages || p.total_pages || "";
+    const status = p.status || "";
+
+    // Build notes with rich detail
+    const detailParts: string[] = [`Máy in — ${manufacturer} ${modelName}`];
+    if (port) detailParts.push(`port: ${port}`);
+    if (driver) detailParts.push(`driver: ${driver}`);
+    if (isColor) detailParts.push("màu");
+    if (isDuplex) detailParts.push("2 mặt");
+    if (resolution) detailParts.push(`${resolution} dpi`);
+    if (pageTotal) detailParts.push(`đã in: ${pageTotal} trang`);
+    if (p.network) detailParts.push("mạng");
+    if (p.shared) detailParts.push("chia sẻ");
+    if (status) detailParts.push(`status: ${status}`);
+
+    // Enrich componentsJson with extracted fields
+    const enhancedPrinter = {
+      ...p,
+      _extracted: {
+        isColor,
+        isDuplex,
+        resolution,
+        pageTotal: pageTotal ? Number(pageTotal) : undefined,
+        driver,
+        manufacturer,
+        modelName,
+      },
+    };
+
     result.push({
       deviceId: `printer_${serial || name.replace(/[^a-zA-Z0-9]/g, "_")}_${Date.now()}`,
       deviceType: "printer",
       name,
       manufacturer,
-      modelName: name,
+      modelName,
       serialNumber: serial,
       ipAddress: port,
       macAddress: "",
       cpu: "", ram: "", disk: "", os: "",
-      notes: `Printer — port: ${port}${p.network ? ", network" : ""}${p.shared ? ", shared" : ""}`,
-      componentsJson: JSON.stringify(p),
+      notes: detailParts.join(" · "),
+      componentsJson: JSON.stringify(enhancedPrinter),
       parentDeviceId,
     });
   }
