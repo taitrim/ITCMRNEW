@@ -9,7 +9,7 @@ async function loginViaPage(page: any) {
 
 test.describe('Agent Flow (customer key-based)', () => {
 
-  test('full flow: submit → approve → verify via API', async ({ page }) => {
+  test('full flow: submit (computer + printer) → approve → verify via API', async ({ page }) => {
     await loginViaPage(page);
     const api = page.request;
 
@@ -18,21 +18,39 @@ test.describe('Agent Flow (customer key-based)', () => {
     const custData = await (await api.get(`/api/customers/${customers[0].id}`)).json();
     expect(custData.agentKey).toBeTruthy();
 
-    // Submit inventory as agent
+    // Submit inventory as agent (computer + colour printer)
+    const timestamp = Date.now();
     const submitRes = await api.post(
       `/api/agent-inventory/submit?customerId=${custData.id}&key=${custData.agentKey}`,
       {
         data: {
           action: 'inventory',
-          deviceid: `E2E-${Date.now()}`,
+          deviceid: `E2E-${timestamp}`,
           content: {
-            hardware: { name: `PC-${Date.now()}`, chassis_type: 'laptop', memory: 8192, uuid: `uuid-${Date.now()}` },
-            bios: { smanufacturer: 'Dell Inc.', smodel: 'Latitude 5420', sserial: `SN-${Date.now()}` },
+            hardware: { name: `PC-${timestamp}`, chassis_type: 'laptop', memory: 8192, uuid: `uuid-${timestamp}` },
+            bios: { smanufacturer: 'Dell Inc.', smodel: 'Latitude 5420', sserial: `SN-${timestamp}` },
             operatingsystem: { name: 'Windows', full_name: 'Windows 11 Pro' },
             cpus: [{ name: 'Intel i5' }],
             storages: [{ disksize: 256000 }],
             networks: [{ ipaddress: '10.0.0.1', macaddr: 'AA:BB:CC:DD:EE:FF' }],
             users: [{ LOGIN: 'tester' }],
+            printers: [
+              {
+                name: 'HP LaserJet Pro M404dw',
+                manufacturer: 'HP',
+                model: 'LaserJet Pro M404dw',
+                serial: `SN-PRN-${timestamp}`,
+                port: 'IP_10.0.0.50',
+                driver: 'HP LaserJet Pro M404dw PCL 6',
+                color: false,
+                duplex: true,
+                resolution: '1200x1200',
+                network: true,
+                shared: false,
+                status: 'Online',
+                pages_total: 15420,
+              },
+            ],
           },
         },
       }
@@ -40,20 +58,34 @@ test.describe('Agent Flow (customer key-based)', () => {
     expect(submitRes.ok()).toBeTruthy();
     const { data: submitData } = await submitRes.json();
     expect(submitData.status).toBe('pending');
+    expect(submitData.deviceCount).toBe(2); // computer + printer
     const submissionId = submitData.id;
 
     // Verify in submissions list
     const listData = await (await api.get('/api/agent-inventory/submissions')).json();
     expect(listData.data.find((s: any) => s.id === submissionId)).toBeTruthy();
 
-    // Approve
+    // Verify review data has printer with correct fields
+    const detailBefore = await (await api.get(`/api/agent-inventory/submissions/${submissionId}`)).json();
+    const rd = detailBefore.data.reviewData;
+    expect(rd.devices.length).toBe(2);
+    const printerDev = rd.devices.find((d: any) => d.parsed.deviceType === 'printer');
+    expect(printerDev).toBeTruthy();
+    expect(printerDev.parsed.manufacturer).toBe('HP');
+    // color: false → notes không chứa 'màu'
+    expect(printerDev.parsed.notes).not.toContain('màu');
+    // duplex: true → notes chứa '2 mặt'
+    expect(printerDev.parsed.notes).toContain('2 mặt');
+    expect(printerDev.parsed.notes).toContain('15420 trang');
+
+    // Approve both devices
     const approveRes = await api.post(`/api/agent-inventory/submissions/${submissionId}/review`, {
       data: { action: 'approve' },
     });
     expect(approveRes.ok()).toBeTruthy();
     const approveJson = await approveRes.json();
     expect(approveJson.data.status).toBe('approved');
-    expect(approveJson.data.confirmedCount).toBe(1);
+    expect(approveJson.data.confirmedCount).toBe(2);
 
     // Verify detail
     const detailRes = await api.get(`/api/agent-inventory/submissions/${submissionId}`);

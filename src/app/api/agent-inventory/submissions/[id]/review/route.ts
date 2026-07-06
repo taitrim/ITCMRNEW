@@ -81,6 +81,9 @@ export async function POST(
   }
 
   let confirmedCount = 0;
+  // Map từ parsed deviceId → DB id (để resolve parentDeviceId đúng)
+  const parsedToDbId: Record<string, string> = {};
+
   for (const deviceId of devicesToConfirm) {
     const devData = reviewData.devices.find(
       (d: any) => String(d.parsed?.deviceId || `${d.parsed?.serialNumber || d.parsed?.name}`) === deviceId
@@ -101,7 +104,7 @@ export async function POST(
     const os = (d.os as string) || null;
     const notes = (d.notes as string) || null;
     const componentsJson = (d.componentsJson as string) || null;
-    const parentDeviceId = (d.parentDeviceId as string) || null;
+    const parsedParentId = (d.parentDeviceId as string) || null;
     const hostnameNote = name ? `Hostname: ${name}` : "";
     const mergedNotes = [hostnameNote, notes].filter(Boolean).join("\n");
 
@@ -112,6 +115,12 @@ export async function POST(
     }
     if (newEmployeeIds[deviceId]) {
       assignedToId = newEmployeeIds[deviceId];
+    }
+
+    // Resolve parentDeviceId: parsed logical id → DB id
+    let parentDbId: string | null = null;
+    if (parsedParentId && parsedToDbId[parsedParentId]) {
+      parentDbId = parsedToDbId[parsedParentId];
     }
 
     if (devData.match.found && devData.match.existingDeviceId) {
@@ -141,10 +150,12 @@ export async function POST(
             ...(assignedToId !== null ? { assignedToId } : {}),
           },
         });
+        // Map parsed deviceId → existing DB id
+        parsedToDbId[deviceId] = existing.id;
       }
     } else {
       // CREATE new device
-      await prisma.customerCollectedDevice.create({
+      const created = await prisma.customerCollectedDevice.create({
         data: {
           customerId: submission.customerId,
           deviceType,
@@ -164,9 +175,12 @@ export async function POST(
           status: "active",
           collectedAt: new Date(),
           ...(assignedToId ? { assignedToId } : {}),
-          ...(parentDeviceId ? { parentDeviceId } : {}),
+          // parentDeviceId: dùng DB id đã map được
+          ...(parentDbId ? { parentDeviceId: parentDbId } : {}),
         },
       });
+      // Map parsed deviceId → DB id
+      parsedToDbId[deviceId] = created.id;
     }
     confirmedCount++;
   }
