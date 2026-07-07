@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Download, Key, RefreshCw, Eye, EyeOff, Check, AlertCircle, Loader2, Clock, Monitor, ChevronRight } from "lucide-react";
+import { Download, Key, RefreshCw, Eye, EyeOff, Check, AlertCircle, Loader2, Clock, Monitor, ChevronRight, Upload, Wifi, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type AgentInfo = {
@@ -204,6 +204,42 @@ export function AgentTab({ customerId }: { customerId: string }) {
         )}
       </div>
 
+      {/* GLPI Network Inventory Import */}
+      <div className="bg-white rounded-xl border border-border/50 p-4">
+        <h3 className="text-sm font-semibold text-gray-900 mb-1">📡 GLPI Network Import</h3>
+        <p className="text-[11px] text-muted-foreground mb-3">
+          Nhập JSON từ GLPI Network Inventory (SNMP discovery) — switch, router, firewall, AP.
+        </p>
+        <NetworkImportForm customerId={customerId} />
+
+        {/* Divider */}
+        <div className="border-t border-gray-100 my-3" />
+
+        {/* Download network scan script */}
+        <h4 className="text-xs font-semibold text-gray-800 mb-2">Hoặc tải Script SNMP Scanner</h4>
+        <p className="text-[11px] text-muted-foreground mb-2">
+          Script tự động quét mạng bằng SNMP, phát hiện thiết bị mạng và gửi về CRM.
+        </p>
+        <div className="flex gap-2">
+          <a
+            href={`/api/agent-inventory/network-download/${customerId}?os=windows`}
+            className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-gray-900 text-white text-xs font-medium hover:bg-gray-800 transition-colors"
+          >
+            <Download size={13} /> Windows (.ps1)
+          </a>
+          <a
+            href={`/api/agent-inventory/network-download/${customerId}?os=linux`}
+            className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-gray-300 text-gray-700 text-xs font-medium hover:bg-gray-50 transition-colors"
+          >
+            <Download size={13} /> Linux/macOS (.sh)
+          </a>
+        </div>
+        <p className="text-[10px] text-gray-400 mt-1">
+          Cần <code className="bg-gray-100 px-1 rounded">snmpwalk</code> trên máy chạy script.
+          Yêu cầu SNMP community string của thiết bị mạng.
+        </p>
+      </div>
+
       {/* Hướng dẫn */}
       <div className="bg-white rounded-xl border border-border/50 p-4">
         <h3 className="text-sm font-semibold text-gray-900 mb-2">Hướng dẫn</h3>
@@ -219,6 +255,116 @@ export function AgentTab({ customerId }: { customerId: string }) {
 
       {/* Lịch sử thu thập */}
       <SubmissionHistory customerId={customerId} />
+    </div>
+  );
+}
+
+/* ===== Network Import Form ===== */
+function NetworkImportForm({ customerId }: { customerId: string }) {
+  const [rawJson, setRawJson] = useState("");
+  const [importing, setImporting] = useState(false);
+  const [result, setResult] = useState<{ submissionId: string; deviceCount: number; matchedCount: number; newCount: number } | null>(null);
+  const [err, setErr] = useState("");
+
+  const handleImport = async () => {
+    setErr("");
+    setResult(null);
+    if (!rawJson.trim()) { setErr("Vui lòng nhập JSON"); return; }
+
+    let parsed: unknown;
+    try { parsed = JSON.parse(rawJson); } catch {
+      setErr("JSON không hợp lệ. Kiểm tra cú pháp.");
+      return;
+    }
+
+    setImporting(true);
+    try {
+      const res = await fetch(`/api/agent-inventory/network-import?customerId=${customerId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(parsed),
+      });
+      const data = await res.json();
+      if (data.error) { setErr(data.error); return; }
+      setResult(data.data);
+      setRawJson("");
+    } catch {
+      setErr("Lỗi kết nối đến server");
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => setRawJson(ev.target?.result as string || "");
+    reader.readAsText(file);
+  };
+
+  return (
+    <div className="space-y-2">
+      {/* Upload file */}
+      <label className="flex items-center gap-2 h-8 px-3 rounded-lg border border-dashed border-gray-300 text-xs text-gray-500 hover:border-blue-400 hover:text-blue-600 cursor-pointer transition-colors">
+        <Upload size={14} />
+        Chọn file JSON từ GLPI Network Inventory
+        <input type="file" accept=".json" onChange={handleFileUpload} className="hidden" />
+      </label>
+
+      {/* Textarea for JSON */}
+      <textarea
+        value={rawJson}
+        onChange={e => setRawJson(e.target.value)}
+        rows={6}
+        className="w-full px-2.5 py-2 rounded-lg border border-gray-200 text-[11px] font-mono focus:outline-hidden focus:border-blue-400 resize-none"
+        placeholder='[{"type":"switch","manufacturer":"Cisco","serial":"FOC1234XXXX","ip":"192.168.1.1","ports":[...]}]'
+      />
+
+      {/* Actions */}
+      <div className="flex items-center gap-2">
+        <button
+          onClick={handleImport}
+          disabled={importing || !rawJson.trim()}
+          className="inline-flex items-center gap-1.5 h-8 px-3.5 rounded-lg bg-primary text-white text-xs font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors"
+        >
+          {importing ? <Loader2 size={13} className="animate-spin" /> : <Wifi size={13} />}
+          {importing ? "Đang nhập..." : "Nhập thiết bị mạng"}
+        </button>
+        {rawJson && (
+          <button onClick={() => { setRawJson(""); setErr(""); setResult(null); }}
+            className="h-8 px-2.5 rounded-lg border border-gray-200 text-xs text-gray-500 hover:bg-gray-50">
+            <X size={13} />
+          </button>
+        )}
+      </div>
+
+      {/* Error */}
+      {err && (
+        <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-red-50 text-red-600 text-xs">
+          <AlertCircle size={12} /> {err}
+        </div>
+      )}
+
+      {/* Result */}
+      {result && (
+        <div className="rounded-lg bg-green-50 p-3 space-y-1">
+          <div className="flex items-center gap-1.5 text-green-700 text-xs font-medium">
+            <Check size={13} /> Đã nhập thành công!
+          </div>
+          <div className="text-[11px] text-gray-600 space-y-0.5">
+            <p>Tổng số thiết bị mạng: <strong>{result.deviceCount}</strong></p>
+            <p>Đã tìm thấy trong hệ thống: <strong>{result.matchedCount}</strong> (tự động cập nhật)</p>
+            <p>Thiết bị mới: <strong>{result.newCount}</strong> (chờ duyệt)</p>
+          </div>
+          {result.newCount > 0 && (
+            <a href={`/agent-updates`}
+              className="inline-block mt-1 text-[11px] text-blue-600 hover:underline">
+              Xem và duyệt thiết bị mới →
+            </a>
+          )}
+        </div>
+      )}
     </div>
   );
 }
