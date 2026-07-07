@@ -46,6 +46,13 @@ export async function GET(req: NextRequest) {
     ]),
   ]);
 
+  // Lấy tên người duyệt cho các submission đã review
+  const reviewerIds = [...new Set(submissions.filter(s => s.reviewedById).map(s => s.reviewedById!))];
+  const reviewers = reviewerIds.length > 0
+    ? await prisma.users.findMany({ where: { id: { in: reviewerIds } }, select: { id: true, name: true } })
+    : [];
+  const reviewerMap = Object.fromEntries(reviewers.map(r => [r.id, r.name]));
+
   return NextResponse.json({
     data: submissions.map((s) => ({
       id: s.id,
@@ -56,6 +63,9 @@ export async function GET(req: NextRequest) {
       status: s.status,
       deviceCount: s.deviceCount,
       createdAt: s.createdAt.toISOString(),
+      reviewedById: s.reviewedById,
+      reviewedByName: s.reviewedById ? (reviewerMap[s.reviewedById] || null) : null,
+      reviewedAt: s.reviewedAt?.toISOString() ?? null,
       devices: s.devices,
     })),
     meta: {

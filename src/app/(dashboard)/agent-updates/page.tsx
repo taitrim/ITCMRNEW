@@ -1,14 +1,15 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, use } from "react";
 import Link from "next/link";
+import { useSearchParams, useRouter } from "next/navigation";
 import {
   Monitor, Clock, CheckCircle, XCircle, HardDrive,
   ChevronRight, ChevronLeft, Eye, RefreshCw, Download,
   FileText, Activity, Server, Laptop, Printer,
-  Users, Building2, Calendar, ArrowRight,
+  Users, Building2, Calendar, ArrowRight, X,
   Wifi, Database, Cpu, Box, MoreHorizontal,
-  PieChart,
+  PieChart, User, Check,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -25,6 +26,9 @@ type Submission = {
   status: string;
   deviceCount: number;
   createdAt: string;
+  reviewedById?: string | null;
+  reviewedByName?: string | null;
+  reviewedAt?: string | null;
   devices?: { id: string; deviceType: string; manufacturer?: string; modelName?: string; serialNumber?: string }[];
 };
 
@@ -72,17 +76,129 @@ const deviceTypeIcons: Record<string, any> = {
   printer: Printer, network: Wifi, peripheral: Box,
 };
 
+/* ===== Detail Modal ===== */
+function DetailModal({ submission, onClose }: { submission: Submission | null; onClose: () => void }) {
+  if (!submission) return null;
+  const cfg = statusConfig[submission.status] || statusConfig.pending;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg mx-auto overflow-hidden" onClick={e => e.stopPropagation()}>
+        {/* Header */}
+        <div className="px-5 py-4 border-b border-border flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            {submission.customerLogo ? (
+              <div className="w-10 h-10 rounded-full overflow-hidden border border-border">
+                <img src={submission.customerLogo} alt="" className="w-full h-full object-cover" />
+              </div>
+            ) : (
+              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-slate-400 to-slate-500 flex items-center justify-center text-white text-xs font-bold">
+                {customerInitials(submission.customerName || "")}
+              </div>
+            )}
+            <div>
+              <h3 className="text-sm font-bold text-gray-900">{submission.customerName || "Đã xóa"}</h3>
+              <p className="text-[10px] text-muted-foreground">{submission.deviceCount} thiết bị</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-lg text-gray-300 hover:text-gray-500 hover:bg-gray-100 transition-all">
+            <X size={16} />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="px-5 py-4 space-y-3">
+          {/* Status row */}
+          <div className="flex items-center gap-2 text-xs">
+            <Badge variant={cfg.badge} size="md">{cfg.label}</Badge>
+            <span className="text-muted-foreground flex items-center gap-1">
+              <Calendar size={11} />
+              {new Date(submission.createdAt).toLocaleDateString("vi-VN", {
+                day: "2-digit", month: "2-digit", year: "numeric",
+                hour: "2-digit", minute: "2-digit",
+              })}
+            </span>
+          </div>
+
+          {/* Reviewer info */}
+          {(submission.reviewedByName || submission.reviewedAt) && (
+            <div className="flex items-center gap-4 text-xs text-muted-foreground bg-gray-50 rounded-xl px-3 py-2">
+              {submission.reviewedByName && (
+                <span className="flex items-center gap-1.5">
+                  <User size={12} />
+                  {submission.reviewedByName}
+                </span>
+              )}
+              {submission.reviewedAt && (
+                <span className="flex items-center gap-1.5">
+                  <Clock size={12} />
+                  {new Date(submission.reviewedAt).toLocaleDateString("vi-VN", {
+                    day: "2-digit", month: "2-digit", year: "numeric",
+                    hour: "2-digit", minute: "2-digit",
+                  })}
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* Devices summary */}
+          {submission.devices && submission.devices.length > 0 ? (
+            <div>
+              <p className="text-[11px] font-semibold text-gray-600 mb-2">Danh sách thiết bị</p>
+              <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                {submission.devices.map((d, i) => {
+                  const Icon = deviceTypeIcons[d.deviceType] || Box;
+                  return (
+                    <div key={d.id || i} className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg bg-gray-50 text-xs">
+                      <Icon size={12} className="text-gray-400" />
+                      <span className="text-gray-700 font-medium">{d.manufacturer || ""} {d.modelName || ""}</span>
+                      {d.serialNumber && <span className="text-muted-foreground">· {d.serialNumber.substring(0, 12)}</span>}
+                      <Badge variant="default" size="sm">{DEVICE_TYPE_LABELS[d.deviceType] || d.deviceType}</Badge>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground text-center py-4">Không có thông tin thiết bị</p>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="px-5 py-3 border-t border-border flex justify-end">
+          {submission.status === "pending" ? (
+            <Link href={`/agent-updates/${submission.id}`}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gray-900 text-white text-xs font-medium hover:bg-gray-800 transition-all shadow-xs">
+              <Eye size={13} /> Xem & duyệt
+            </Link>
+          ) : (
+            <button onClick={onClose}
+              className="px-4 py-2 rounded-xl text-xs text-muted-foreground hover:bg-gray-100 transition-all">
+              Đóng
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ===== Page ===== */
 export default function AgentUpdatesPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const urlFilter = searchParams.get("filter") || "all";
+
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [filter, setFilter] = useState<string>("all");
+  const [filter, setFilter] = useState<string>(urlFilter);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
   const [stats, setStats] = useState({ total: 0, pending: 0, approved: 0, rejected: 0 });
   const [deviceTypes, setDeviceTypes] = useState<{ type: string; count: number }[]>([]);
+  const [detailTarget, setDetailTarget] = useState<Submission | null>(null);
 
   const loadSubmissions = useCallback(async () => {
     setLoading(true);
@@ -110,9 +226,15 @@ export default function AgentUpdatesPage() {
   const handleFilterChange = (newFilter: string) => {
     setFilter(newFilter);
     setPage(1);
+    // Sync URL
+    const p = new URLSearchParams(window.location.search);
+    if (newFilter === "all") p.delete("filter"); else p.set("filter", newFilter);
+    const qs = p.toString();
+    router.replace(`/agent-updates${qs ? `?${qs}` : ""}`, { scroll: false });
   };
 
-  const pendingSubmissions = submissions.filter(s => s.status === "pending");
+  const hasPendingOverall = stats.pending > 0;
+  const pendingPageSubmissions = submissions.filter(s => s.status === "pending");
 
   return (
     <div className="min-h-screen bg-surface-secondary/30 pb-6">
@@ -163,10 +285,10 @@ export default function AgentUpdatesPage() {
           ))}
         </div>
 
-        {/* ═══ Main content: 2-column layout (left: pending feed + guide, right: chart) ═══ */}
+        {/* ═══ Main content ═══ */}
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 mt-4">
 
-          {/* ── Left (3/4): Pending submissions + Guide ── */}
+          {/* ── Left (3/4): Pending feed + Guide ── */}
           <div className="lg:col-span-3 space-y-3">
             <Card>
               <CardHeader>
@@ -177,10 +299,10 @@ export default function AgentUpdatesPage() {
                     <Badge variant="warning" size="sm" className="ml-1">{stats.pending}</Badge>
                   )}
                 </div>
-                <Link href={`/agent-updates?filter=pending`}
+                <button onClick={() => handleFilterChange("pending")}
                   className="text-xs text-primary font-medium flex items-center gap-0.5 hover:underline">
                   Xem tất cả <ArrowRight size={12} />
-                </Link>
+                </button>
               </CardHeader>
               <CardContent className="px-4 py-3">
                 {loading ? (
@@ -195,21 +317,33 @@ export default function AgentUpdatesPage() {
                       </div>
                     ))}
                   </div>
-                ) : pendingSubmissions.length === 0 ? (
+                ) : !hasPendingOverall ? (
                   <div className="flex items-center gap-3 py-3 text-muted-foreground">
                     <CheckCircle size={18} className="text-emerald-400" />
                     <p className="text-xs">Tất cả đợt thu thập đã được xử lý</p>
                   </div>
+                ) : pendingPageSubmissions.length === 0 && page > 1 ? (
+                  <div className="flex items-center gap-3 py-3 text-muted-foreground">
+                    <Clock size={18} className="text-amber-400" />
+                    <p className="text-xs">Đợt chờ duyệt ở trang khác — <button onClick={() => { setPage(1); handleFilterChange("pending"); }} className="text-primary underline">về trang đầu</button></p>
+                  </div>
+                ) : pendingPageSubmissions.length === 0 ? (
+                  <div className="flex items-center gap-3 py-3 text-muted-foreground">
+                    <Clock size={18} className="text-amber-400" />
+                    <p className="text-xs">Không có đợt chờ duyệt nào</p>
+                  </div>
                 ) : (
                   <div className="space-y-2">
-                    {pendingSubmissions.slice(0, 5).map(s => (
+                    {pendingPageSubmissions.slice(0, 5).map(s => (
                       <FeedItem key={s.id} submission={s} />
                     ))}
-                    {pendingSubmissions.length > 5 && (
+                    {stats.pending > 5 && (
                       <div className="text-center pt-1">
-                        <Badge variant="default" size="sm">
-                          +{pendingSubmissions.length - 5} đợt chờ khác
-                        </Badge>
+                        <button onClick={() => handleFilterChange("pending")} className="hover:underline">
+                          <Badge variant="default" size="sm" className="cursor-pointer">
+                            +{stats.pending - 5} đợt chờ khác
+                          </Badge>
+                        </button>
                       </div>
                     )}
                   </div>
@@ -234,7 +368,7 @@ export default function AgentUpdatesPage() {
             </Card>
           </div>
 
-          {/* ── Right (1/4): Device type chart ── */}
+          {/* ── Right (1/4): Chart + Quick actions ── */}
           <div className="space-y-3">
             <Card>
               <CardHeader>
@@ -277,7 +411,6 @@ export default function AgentUpdatesPage() {
               </CardContent>
             </Card>
 
-            {/* Quick actions */}
             <Card>
               <CardHeader>
                 <div className="flex items-center gap-2">
@@ -297,8 +430,8 @@ export default function AgentUpdatesPage() {
                   </div>
                   <ChevronRight size={14} className="text-gray-300 group-hover:text-gray-500" />
                 </Link>
-                <Link href="/agent-updates?filter=pending"
-                  className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-gray-50 transition-colors group">
+                <button onClick={() => handleFilterChange("pending")}
+                  className="w-full flex items-center gap-3 p-2.5 rounded-xl hover:bg-gray-50 transition-colors group text-left">
                   <div className="w-9 h-9 rounded-lg bg-amber-50 flex items-center justify-center group-hover:bg-amber-100 transition-colors">
                     <Clock size={16} className="text-amber-500" />
                   </div>
@@ -307,13 +440,13 @@ export default function AgentUpdatesPage() {
                     <p className="text-[10px] text-muted-foreground">{stats.pending} đợt đang chờ</p>
                   </div>
                   <ChevronRight size={14} className="text-gray-300 group-hover:text-gray-500" />
-                </Link>
+                </button>
               </CardContent>
             </Card>
           </div>
         </div>
 
-        {/* ═══ Submissions: 3-column grid ═══ */}
+        {/* ═══ History: 3-column grid ═══ */}
         <div className="mt-5">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
@@ -342,12 +475,10 @@ export default function AgentUpdatesPage() {
             </div>
           </div>
 
-          {/* Error */}
           {error && (
             <div className="mb-3 rounded-xl bg-red-50 border border-red-100 px-4 py-3 text-xs text-red-700">{error}</div>
           )}
 
-          {/* Loading */}
           {loading ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
               {[1,2,3,4,5,6].map(i => (
@@ -374,11 +505,10 @@ export default function AgentUpdatesPage() {
             <>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                 {submissions.map(s => (
-                  <HistoryCard key={s.id} submission={s} />
+                  <HistoryCard key={s.id} submission={s} onClick={() => setDetailTarget(s)} />
                 ))}
               </div>
 
-              {/* ── Pagination ── */}
               {totalPages > 1 && (
                 <div className="flex items-center justify-between mt-4 pt-4 border-t border-border">
                   <p className="text-xs text-muted-foreground">
@@ -414,6 +544,9 @@ export default function AgentUpdatesPage() {
           )}
         </div>
       </div>
+
+      {/* Detail Modal */}
+      <DetailModal submission={detailTarget} onClose={() => setDetailTarget(null)} />
     </div>
   );
 }
@@ -450,8 +583,8 @@ function FeedItem({ submission: s }: { submission: Submission }) {
   );
 }
 
-/* ═══ History Card (3-column grid) ═══ */
-function HistoryCard({ submission: s }: { submission: Submission }) {
+/* ═══ History Card ═══ */
+function HistoryCard({ submission: s, onClick }: { submission: Submission; onClick: () => void }) {
   const cfg = statusConfig[s.status] || statusConfig.pending;
   const isPending = s.status === "pending";
   const initials = customerInitials(s.customerName || "??");
@@ -460,16 +593,14 @@ function HistoryCard({ submission: s }: { submission: Submission }) {
     : "from-red-400 to-rose-500";
 
   return (
-    <Link href={`/agent-updates/${s.id}`}>
+    <button onClick={onClick} className="w-full text-left">
       <Card className={cn(
         "h-full transition-all duration-200 hover:shadow-sm group cursor-pointer",
         isPending && "ring-1 ring-amber-200"
       )}>
         <CardContent className="p-4 flex flex-col h-full">
-          {/* Top: customer logo/avatar + status */}
           <div className="flex items-start justify-between mb-3">
             <div className="flex items-center gap-2.5 min-w-0">
-              {/* Customer avatar: logo ưu tiên, fallback initials */}
               {s.customerLogo ? (
                 <div className="w-9 h-9 rounded-full overflow-hidden shrink-0 border border-border shadow-xs">
                   <img src={s.customerLogo} alt={s.customerName || ""}
@@ -493,7 +624,7 @@ function HistoryCard({ submission: s }: { submission: Submission }) {
             <Badge variant={cfg.badge} size="sm">{cfg.label}</Badge>
           </div>
 
-          {/* Middle: device type icons */}
+          {/* Device type icons */}
           {s.devices && s.devices.length > 0 ? (
             <div className="flex items-center gap-1.5 mb-2 flex-wrap">
               {s.devices.slice(0, 4).map((d: any, i: number) => {
@@ -512,26 +643,32 @@ function HistoryCard({ submission: s }: { submission: Submission }) {
             <div className="flex-1" />
           )}
 
-          {/* Bottom: date + action */}
+          {/* Reviewer + date */}
           <div className="flex items-center justify-between mt-auto pt-2 border-t border-border/50">
-            <span className="text-[10px] text-muted-foreground flex items-center gap-1">
-              <Calendar size={10} />
-              {new Date(s.createdAt).toLocaleDateString("vi-VN", {
-                day: "2-digit", month: "2-digit", year: "numeric",
-              })}
+            <div className="flex items-center gap-2 text-[10px] text-muted-foreground min-w-0">
+              <Calendar size={10} className="shrink-0" />
+              <span className="truncate">
+                {new Date(s.createdAt).toLocaleDateString("vi-VN", {
+                  day: "2-digit", month: "2-digit", year: "numeric",
+                })}
+              </span>
+              {s.reviewedByName && !isPending && (
+                <span className="flex items-center gap-1 shrink-0">
+                  <span className="text-gray-300">·</span>
+                  <User size={10} />
+                  {s.reviewedByName}
+                </span>
+              )}
+            </div>
+            <span className={cn(
+              "inline-flex items-center gap-1 text-[11px] shrink-0",
+              isPending ? "text-primary font-medium group-hover:underline" : "text-muted-foreground group-hover:text-gray-700 transition-colors"
+            )}>
+              {isPending ? <>Duyệt <ArrowRight size={11} /></> : <>Chi tiết <ChevronRight size={11} /></>}
             </span>
-            {isPending ? (
-              <span className="inline-flex items-center gap-1 text-[11px] font-medium text-primary group-hover:underline">
-                Duyệt <ArrowRight size={11} />
-              </span>
-            ) : (
-              <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground group-hover:text-gray-700 transition-colors">
-                Chi tiết <ChevronRight size={11} />
-              </span>
-            )}
           </div>
         </CardContent>
       </Card>
-    </Link>
+    </button>
   );
 }
