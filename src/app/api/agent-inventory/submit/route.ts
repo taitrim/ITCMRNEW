@@ -33,18 +33,32 @@ type DeviceRecord = {
   assignedUserId?: string;
 };
 
-/** Kiểm tra printer ảo (Windows built-in, app software) */
+/** Kiểm tra printer ảo (Windows built-in, phần mềm) — loại hoàn toàn khỏi hệ thống */
 function isVirtualPrinter(p: any): boolean {
   const name = (p.name || "").toLowerCase();
   const port = (p.port || "").toLowerCase();
+  const driver = (p.driver || "").toLowerCase();
+  const manufacturer = (p.manufacturer || "").toLowerCase();
   const virtualNames = [
+    // Windows built-in
     "microsoft print to pdf", "microsoft xps document writer",
-    "fax", "send to onenote", "onenote", "snagit",
-    "adobe pdf", "cute pdf writer", "pdfcreator",
+    "fax", "microsoft print to", "universal print",
+    // PDF generators
+    "adobe pdf", "cute pdf writer", "pdfcreator", "pdf24",
     "doro pdf", "bullzip pdf printer", "do pdf",
-    "universal print", "microsoft print to",
+    "pdf architect", "nova pdf", "pdf-xchange", "pdf printer",
+    "epson pdf", "canon pdf", "hp pdf",
+    // Remote / collaboration
+    "anydesk", "foxit printer", "foxit pdf printer",
+    "send to onenote", "onenote", "snagit",
+    "virtual printer", "software printer",
   ];
+  // Check name
   if (virtualNames.some(v => name.includes(v))) return true;
+  // Check driver
+  if (driver.includes("pdf") || driver.includes("virtual") || driver.includes("redirect")) return true;
+  // Check manufacturer
+  if (manufacturer.includes("foxit") || manufacturer.includes("anydesk")) return true;
   // Port software: PORTPROMPT:, nul:, : (prompt port)
   if (port.includes("prompt") || port === "nul:" || port.endsWith("prompt:")) return true;
   return false;

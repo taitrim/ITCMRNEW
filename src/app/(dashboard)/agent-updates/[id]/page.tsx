@@ -36,15 +36,17 @@ type Employee = {
 
 /* ===== Virtual printer names (loại trừ khỏi gán nhân viên) ===== */
 const VIRTUAL_PRINTER_NAMES = [
+  // Windows built-in
   "microsoft print to pdf", "microsoft xps document writer",
-  "fax", "send to onenote", "onenote", "snagit",
-  "adobe pdf", "cute pdf writer", "pdfcreator",
+  "fax", "microsoft print to", "universal print",
+  // PDF generators
+  "adobe pdf", "cute pdf writer", "pdfcreator", "pdf24",
   "doro pdf", "bullzip pdf printer", "do pdf",
-  "universal print", "microsoft print to",
-  "anydesk", "foxit printer", "foxit pdf printer",
-  "pdf24", "pdf architect", "nova pdf", "pdf-xchange",
+  "pdf architect", "nova pdf", "pdf-xchange", "pdf printer",
   "epson pdf", "canon pdf", "hp pdf",
-  "microsoft print to pdf",
+  // Remote / collaboration
+  "anydesk", "foxit printer", "foxit pdf printer",
+  "send to onenote", "onenote", "snagit",
   "virtual printer", "software printer",
 ];
 
