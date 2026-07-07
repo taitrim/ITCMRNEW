@@ -20,6 +20,8 @@ type Submission = {
   id: string;
   customerId: string;
   customerName: string;
+  customerLogo?: string | null;
+  customerShortName?: string | null;
   status: string;
   deviceCount: number;
   createdAt: string;
@@ -452,34 +454,46 @@ function FeedItem({ submission: s }: { submission: Submission }) {
 function HistoryCard({ submission: s }: { submission: Submission }) {
   const cfg = statusConfig[s.status] || statusConfig.pending;
   const isPending = s.status === "pending";
+  const initials = customerInitials(s.customerName || "??");
+  const statusGrad = isPending ? "from-amber-400 to-orange-500"
+    : s.status === "approved" ? "from-emerald-400 to-teal-500"
+    : "from-red-400 to-rose-500";
 
   return (
-    <Link href={isPending ? `/agent-updates/${s.id}` : `/customers/${s.customerId}`}>
+    <Link href={`/agent-updates/${s.id}`}>
       <Card className={cn(
-        "h-full transition-all duration-200 hover:shadow-sm",
+        "h-full transition-all duration-200 hover:shadow-sm group cursor-pointer",
         isPending && "ring-1 ring-amber-200"
       )}>
         <CardContent className="p-4 flex flex-col h-full">
-          {/* Top: avatar + status */}
+          {/* Top: customer logo/avatar + status */}
           <div className="flex items-start justify-between mb-3">
             <div className="flex items-center gap-2.5 min-w-0">
-              <div className={cn(
-                "w-9 h-9 rounded-full flex items-center justify-center text-white text-[10px] font-bold shrink-0 shadow-xs",
-                isPending ? "bg-gradient-to-br from-amber-400 to-orange-500"
-                  : s.status === "approved" ? "bg-gradient-to-br from-emerald-400 to-teal-500"
-                  : "bg-gradient-to-br from-red-400 to-rose-500"
-              )}>
-                {customerInitials(s.customerName || "??")}
-              </div>
+              {/* Customer avatar: logo ưu tiên, fallback initials */}
+              {s.customerLogo ? (
+                <div className="w-9 h-9 rounded-full overflow-hidden shrink-0 border border-border shadow-xs">
+                  <img src={s.customerLogo} alt={s.customerName || ""}
+                    className="w-full h-full object-cover" />
+                </div>
+              ) : (
+                <div className={cn(
+                  "w-9 h-9 rounded-full flex items-center justify-center text-white text-[10px] font-bold shrink-0 shadow-xs bg-gradient-to-br",
+                  statusGrad
+                )}>
+                  {initials}
+                </div>
+              )}
               <div className="min-w-0">
-                <p className="text-sm font-semibold text-gray-900 truncate max-w-[160px]">{s.customerName || "Đã xóa"}</p>
+                <p className="text-sm font-semibold text-gray-900 truncate max-w-[160px] group-hover:text-primary transition-colors">
+                  {s.customerShortName || s.customerName || "Đã xóa"}
+                </p>
                 <p className="text-[10px] text-muted-foreground">{(s.devices?.length || s.deviceCount)} thiết bị</p>
               </div>
             </div>
             <Badge variant={cfg.badge} size="sm">{cfg.label}</Badge>
           </div>
 
-          {/* Middle: device type icons (from devices list) */}
+          {/* Middle: device type icons */}
           {s.devices && s.devices.length > 0 ? (
             <div className="flex items-center gap-1.5 mb-2 flex-wrap">
               {s.devices.slice(0, 4).map((d: any, i: number) => {
@@ -507,11 +521,13 @@ function HistoryCard({ submission: s }: { submission: Submission }) {
               })}
             </span>
             {isPending ? (
-              <span className="inline-flex items-center gap-1 text-[11px] font-medium text-primary">
+              <span className="inline-flex items-center gap-1 text-[11px] font-medium text-primary group-hover:underline">
                 Duyệt <ArrowRight size={11} />
               </span>
             ) : (
-              <span className="text-[10px] text-muted-foreground">Chi tiết</span>
+              <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground group-hover:text-gray-700 transition-colors">
+                Chi tiết <ChevronRight size={11} />
+              </span>
             )}
           </div>
         </CardContent>

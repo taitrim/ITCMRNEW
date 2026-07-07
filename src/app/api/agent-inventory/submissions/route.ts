@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
     prisma.inventorySubmission.findMany({
       where,
       include: {
-        customer: { select: { id: true, name: true } },
+        customer: { select: { id: true, name: true, shortName: true, logo: true } },
         devices: { select: { id: true, deviceType: true, manufacturer: true, modelName: true, serialNumber: true } },
       },
       orderBy: { createdAt: "desc" },
@@ -51,6 +51,8 @@ export async function GET(req: NextRequest) {
       id: s.id,
       customerId: s.customerId,
       customerName: s.customer.name,
+      customerLogo: s.customer.logo,
+      customerShortName: s.customer.shortName,
       status: s.status,
       deviceCount: s.deviceCount,
       createdAt: s.createdAt.toISOString(),

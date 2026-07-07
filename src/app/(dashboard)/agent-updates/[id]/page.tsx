@@ -445,6 +445,7 @@ export default function SubmissionReviewPage({ params }: { params: Promise<{ id:
     };
   }, [reviewData]);
 
+  const isReviewed = submission?.status === "approved" || submission?.status === "rejected";
   const assignedCount = useMemo(() => Object.values(assignments).filter(Boolean).length, [assignments]);
 
   const handleAssignmentChange = useCallback((index: number, employeeId: string | null) => {
@@ -626,6 +627,21 @@ export default function SubmissionReviewPage({ params }: { params: Promise<{ id:
               <button onClick={() => router.back()} className="p-2 rounded-xl text-muted-foreground hover:text-gray-600 hover:bg-gray-100 transition-all">
                 <ArrowLeft size={18} />
               </button>
+              {submission?.customerLogo ? (
+                <div className="w-10 h-10 rounded-xl overflow-hidden shrink-0 border border-border shadow-xs">
+                  <img src={submission.customerLogo} alt={submission.customerName || ""}
+                    className="w-full h-full object-cover" />
+                </div>
+              ) : (
+                <div className={cn(
+                  "w-10 h-10 rounded-xl flex items-center justify-center text-white text-sm font-bold shrink-0 shadow-xs bg-gradient-to-br",
+                  isReviewed && submission?.status === "approved" ? "from-emerald-400 to-teal-500"
+                    : isReviewed && submission?.status === "rejected" ? "from-red-400 to-rose-500"
+                    : "from-cyan-500 to-teal-500"
+                )}>
+                  {(submission?.customerName || "?").charAt(0).toUpperCase()}
+                </div>
+              )}
               <div>
                 <div className="text-[11px] text-muted-foreground tracking-wide uppercase">Duyệt thiết bị</div>
                 <h1 className="text-base font-bold text-gray-900">
@@ -645,33 +661,54 @@ export default function SubmissionReviewPage({ params }: { params: Promise<{ id:
             </div>
           </div>
 
-          {/* Action bar */}
-          <div className="flex items-center justify-between mt-3 pt-3 border-t border-border">
-            <div className="flex items-center gap-4 text-xs">
-              <label className="flex items-center gap-2 cursor-pointer text-muted-foreground hover:text-gray-700 transition-colors">
-                <input type="checkbox" checked={selected.size === reviewData?.devices.length}
-                  onChange={toggleAll}
-                  className="w-3.5 h-3.5 rounded border-gray-300 text-primary focus:ring-primary/30" />
-                Chọn tất cả
-              </label>
-              <span className="text-muted-foreground">
-                <strong className="text-gray-600">{selected.size}</strong> / {reviewData?.devices.length || 0}
-                {assignedCount > 0 ? <span className="ml-2">· Gán <strong className="text-gray-600">{assignedCount}</strong></span> : null}
+          {/* Action bar / Review banner */}
+          {isReviewed ? (
+            <div className="flex items-center gap-3 mt-3 pt-3 border-t border-border">
+              <div className={cn(
+                "inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium",
+                submission?.status === "approved" ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"
+              )}>
+                {submission?.status === "approved" ? <Check size={13} /> : <X size={13} />}
+                {submission?.status === "approved" ? "Đã duyệt" : "Đã từ chối"}
+                {submission?.reviewedAt && (
+                  <span className="text-[10px] opacity-70">
+                    · {new Date(submission.reviewedAt).toLocaleDateString("vi-VN")}
+                  </span>
+                )}
+              </div>
+              <span className="text-xs text-muted-foreground">
+                <strong className="text-gray-600">{reviewData?.devices.length || 0}</strong> thiết bị
+                {assignedCount > 0 ? <span className="ml-2">· <strong className="text-gray-600">{assignedCount}</strong> đã gán</span> : null}
               </span>
             </div>
-            <div className="flex items-center gap-2">
-              <button onClick={handleReject} disabled={submitting}
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl border border-red-200 text-red-600 text-xs font-medium hover:bg-red-50 transition-all disabled:opacity-50">
-                <X size={13} /> Từ chối
-              </button>
-              <button onClick={handleApprove} disabled={selected.size === 0 || submitting}
-                className="inline-flex items-center gap-2 px-5 py-2 rounded-xl bg-gray-900 text-white text-xs font-medium hover:bg-gray-800 transition-all disabled:opacity-50 shadow-xs">
-                {submitting
-                  ? "Đang xử lý..."
-                  : <><Check size={13} /> Duyệt {selected.size} thiết bị</>}
-              </button>
+          ) : (
+            <div className="flex items-center justify-between mt-3 pt-3 border-t border-border">
+              <div className="flex items-center gap-4 text-xs">
+                <label className="flex items-center gap-2 cursor-pointer text-muted-foreground hover:text-gray-700 transition-colors">
+                  <input type="checkbox" checked={selected.size === reviewData?.devices.length}
+                    onChange={toggleAll}
+                    className="w-3.5 h-3.5 rounded border-gray-300 text-primary focus:ring-primary/30" />
+                  Chọn tất cả
+                </label>
+                <span className="text-muted-foreground">
+                  <strong className="text-gray-600">{selected.size}</strong> / {reviewData?.devices.length || 0}
+                  {assignedCount > 0 ? <span className="ml-2">· Gán <strong className="text-gray-600">{assignedCount}</strong></span> : null}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button onClick={handleReject} disabled={submitting}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl border border-red-200 text-red-600 text-xs font-medium hover:bg-red-50 transition-all disabled:opacity-50">
+                  <X size={13} /> Từ chối
+                </button>
+                <button onClick={handleApprove} disabled={selected.size === 0 || submitting}
+                  className="inline-flex items-center gap-2 px-5 py-2 rounded-xl bg-gray-900 text-white text-xs font-medium hover:bg-gray-800 transition-all disabled:opacity-50 shadow-xs">
+                  {submitting
+                    ? "Đang xử lý..."
+                    : <><Check size={13} /> Duyệt {selected.size} thiết bị</>}
+                </button>
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
 
@@ -778,20 +815,22 @@ export default function SubmissionReviewPage({ params }: { params: Promise<{ id:
           </Card>
         )}
 
-        {/* ── Bottom bar ── */}
-        <div className="sticky bottom-4 z-10 bg-white/90 backdrop-blur-md rounded-2xl border border-border/80 px-5 py-3.5 flex items-center justify-between shadow-lg">
-          <div className="flex items-center gap-5 text-xs text-muted-foreground">
-            <span><strong className="text-gray-600">{selected.size}</strong> / {reviewData?.devices.length || 0} chọn</span>
-            {assignedCount > 0 ? <span><strong className="text-gray-600">{assignedCount}</strong> đã gán</span> : null}
-            <span className="text-gray-300">·</span>
-            <span className="text-emerald-600">+{stats.newCount} mới</span>
-            <span className="text-amber-600">{stats.matched} cập nhật</span>
+        {/* ── Bottom bar (only for pending) ── */}
+        {!isReviewed && (
+          <div className="sticky bottom-4 z-10 bg-white/90 backdrop-blur-md rounded-2xl border border-border/80 px-5 py-3.5 flex items-center justify-between shadow-lg">
+            <div className="flex items-center gap-5 text-xs text-muted-foreground">
+              <span><strong className="text-gray-600">{selected.size}</strong> / {reviewData?.devices.length || 0} chọn</span>
+              {assignedCount > 0 ? <span><strong className="text-gray-600">{assignedCount}</strong> đã gán</span> : null}
+              <span className="text-gray-300">·</span>
+              <span className="text-emerald-600">+{stats.newCount} mới</span>
+              <span className="text-amber-600">{stats.matched} cập nhật</span>
+            </div>
+            <button onClick={handleApprove} disabled={selected.size === 0 || submitting}
+              className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-medium hover:bg-gray-800 disabled:opacity-50 transition-all shadow-xs">
+              {submitting ? "Đang xử lý..." : <><Check size={15} /> Duyệt {selected.size} thiết bị</>}
+            </button>
           </div>
-          <button onClick={handleApprove} disabled={selected.size === 0 || submitting}
-            className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-medium hover:bg-gray-800 disabled:opacity-50 transition-all shadow-xs">
-            {submitting ? "Đang xử lý..." : <><Check size={15} /> Duyệt {selected.size} thiết bị</>}
-          </button>
-        </div>
+        )}
       </div>
 
       {/* Add Employee Modal */}

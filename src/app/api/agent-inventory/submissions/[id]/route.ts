@@ -15,7 +15,7 @@ export async function GET(
   const submission = await prisma.inventorySubmission.findUnique({
     where: { id },
     include: {
-      customer: { select: { id: true, name: true } },
+      customer: { select: { id: true, name: true, shortName: true, logo: true } },
       devices: {
         select: {
           id: true, deviceType: true, manufacturer: true,
@@ -36,6 +36,8 @@ export async function GET(
       id: submission.id,
       customerId: submission.customerId,
       customerName: submission.customer.name,
+      customerLogo: submission.customer.logo,
+      customerShortName: submission.customer.shortName,
       status: submission.status,
       deviceCount: submission.deviceCount,
       reviewData: submission.reviewData ? JSON.parse(submission.reviewData) : null,
