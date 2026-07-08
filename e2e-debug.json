@@ -1,0 +1,224 @@
+﻿{
+  "config": {
+    "argv": [
+      "C:\\Program Files\\nodejs\\node.exe",
+      "D:\\SOFT\\NEW CRM\\node_modules\\@playwright\\test\\cli.js",
+      "test",
+      "e2e/agent-flow.spec.ts:12",
+      "--project=chromium",
+      "--reporter=json"
+    ],
+    "configFile": "D:\\SOFT\\NEW CRM\\playwright.config.ts",
+    "rootDir": "D:/SOFT/NEW CRM/e2e",
+    "failOnFlakyTests": false,
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "D:/SOFT/NEW CRM/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "setup",
+        "name": "setup",
+        "testDir": "D:/SOFT/NEW CRM/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "/.*\\.setup\\.ts$/"
+        ],
+        "timeout": 60000
+      },
+      {
+        "outputDir": "D:/SOFT/NEW CRM/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "chromium",
+        "name": "chromium",
+        "testDir": "D:/SOFT/NEW CRM/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "/.*\\.spec\\.ts$/"
+        ],
+        "timeout": 60000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "json"
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.61.1",
+    "workers": 1,
+    "webServer": {
+      "command": "npm run dev",
+      "url": "http://localhost:3000",
+      "reuseExistingServer": true,
+      "timeout": 120000,
+      "stdout": "pipe",
+      "stderr": "pipe"
+    }
+  },
+  "suites": [
+    {
+      "title": "auth.setup.ts",
+      "file": "auth.setup.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "authenticate via page login",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 60000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "setup",
+              "projectName": "setup",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 6252,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-07-06T13:55:18.711Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "17e3fe6f4d9d8bd79c6b-de1fb125cb04d5019b43",
+          "file": "auth.setup.ts",
+          "line": 6,
+          "column": 6
+        }
+      ]
+    },
+    {
+      "title": "agent-flow.spec.ts",
+      "file": "agent-flow.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "Agent Flow (customer key-based)",
+          "file": "agent-flow.spec.ts",
+          "line": 10,
+          "column": 6,
+          "specs": [
+            {
+              "title": "full flow: submit (computer + printer) ΓåÆ approve ΓåÆ verify via API",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "failed",
+                      "duration": 6023,
+                      "error": {
+                        "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32m2\u001b[39m\nReceived: \u001b[31m1\u001b[39m",
+                        "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32m2\u001b[39m\nReceived: \u001b[31m1\u001b[39m\n    at D:\\SOFT\\NEW CRM\\e2e\\agent-flow.spec.ts:61:36",
+                        "location": {
+                          "file": "D:\\SOFT\\NEW CRM\\e2e\\agent-flow.spec.ts",
+                          "column": 36,
+                          "line": 61
+                        },
+                        "snippet": "\u001b[0m \u001b[90m 59 |\u001b[39m     \u001b[36mconst\u001b[39m { data\u001b[33m:\u001b[39m submitData } \u001b[33m=\u001b[39m \u001b[36mawait\u001b[39m submitRes\u001b[33m.\u001b[39mjson()\u001b[33m;\u001b[39m\n \u001b[90m 60 |\u001b[39m     expect(submitData\u001b[33m.\u001b[39mstatus)\u001b[33m.\u001b[39mtoBe(\u001b[32m'pending'\u001b[39m)\u001b[33m;\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 61 |\u001b[39m     expect(submitData\u001b[33m.\u001b[39mdeviceCount)\u001b[33m.\u001b[39mtoBe(\u001b[35m2\u001b[39m)\u001b[33m;\u001b[39m \u001b[90m// computer + printer\u001b[39m\n \u001b[90m    |\u001b[39m                                    \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 62 |\u001b[39m     \u001b[36mconst\u001b[39m submissionId \u001b[33m=\u001b[39m submitData\u001b[33m.\u001b[39mid\u001b[33m;\u001b[39m\n \u001b[90m 63 |\u001b[39m\n \u001b[90m 64 |\u001b[39m     \u001b[90m// Verify in submissions list\u001b[39m\u001b[0m"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "D:\\SOFT\\NEW CRM\\e2e\\agent-flow.spec.ts",
+                            "column": 36,
+                            "line": 61
+                          },
+                          "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32m2\u001b[39m\nReceived: \u001b[31m1\u001b[39m\n\n  59 |     const { data: submitData } = await submitRes.json();\n  60 |     expect(submitData.status).toBe('pending');\n> 61 |     expect(submitData.deviceCount).toBe(2); // computer + printer\n     |                                    ^\n  62 |     const submissionId = submitData.id;\n  63 |\n  64 |     // Verify in submissions list\n    at D:\\SOFT\\NEW CRM\\e2e\\agent-flow.spec.ts:61:36"
+                        }
+                      ],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-07-06T13:55:27.175Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "D:\\SOFT\\NEW CRM\\test-results\\agent-flow-Agent-Flow-cust-92674--ΓåÆ-approve-ΓåÆ-verify-via-API-chromium\\test-failed-1.png"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "D:\\SOFT\\NEW CRM\\test-results\\agent-flow-Agent-Flow-cust-92674--ΓåÆ-approve-ΓåÆ-verify-via-API-chromium\\error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "D:\\SOFT\\NEW CRM\\e2e\\agent-flow.spec.ts",
+                        "column": 36,
+                        "line": 61
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "17abf4a0d2109284a66d-d8156a8a5a3822b41d88",
+              "file": "agent-flow.spec.ts",
+              "line": 12,
+              "column": 7
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-07-06T13:55:16.524Z",
+    "duration": 17367.932,
+    "expected": 1,
+    "skipped": 0,
+    "unexpected": 1,
+    "flaky": 0
+  }
+}

@@ -204,7 +204,7 @@ export function AgentTab({ customerId }: { customerId: string }) {
         )}
       </div>
 
-      {/* GLPI Network Inventory Import */}
+        {/* GLPI Network Inventory Import */}
       <div className="bg-white rounded-xl border border-border/50 p-4">
         <h3 className="text-sm font-semibold text-gray-900 mb-1">📡 GLPI Network Import</h3>
         <p className="text-[11px] text-muted-foreground mb-3">
@@ -215,10 +215,13 @@ export function AgentTab({ customerId }: { customerId: string }) {
         {/* Divider */}
         <div className="border-t border-gray-100 my-3" />
 
-        {/* Download network scan script */}
-        <h4 className="text-xs font-semibold text-gray-800 mb-2">Hoặc tải Script SNMP Scanner</h4>
+        {/* Download GLPI Agent wrapper script */}
+        <h4 className="text-xs font-semibold text-gray-800 mb-2">Hoặc chạy GLPI Agent quét mạng</h4>
         <p className="text-[11px] text-muted-foreground mb-2">
-          Script tự động quét mạng bằng SNMP, phát hiện thiết bị mạng và gửi về CRM.
+          Wrapper script gọi <code className="bg-gray-100 px-1 rounded text-[10px]">glpi-netdiscovery</code> +
+          <code className="bg-gray-100 px-1 rounded text-[10px]">glpi-netinventory</code> thật (trong gói
+          <code className="bg-gray-100 px-1 rounded text-[10px]">glpi-agent</code> Perl) — phát hiện switch,
+          router, firewall, AP và gửi về CRM.
         </p>
         <div className="flex gap-2">
           <a
@@ -235,8 +238,10 @@ export function AgentTab({ customerId }: { customerId: string }) {
           </a>
         </div>
         <p className="text-[10px] text-gray-400 mt-1">
-          Cần <code className="bg-gray-100 px-1 rounded">snmpwalk</code> trên máy chạy script.
-          Yêu cầu SNMP community string của thiết bị mạng.
+          Yêu cầu GLPI Agent (Perl) đã cài trên máy chạy script: <code className="bg-gray-100 px-1 rounded text-[10px]">apt install glpi-agent</code>
+        </p>
+        <p className="text-[10px] text-gray-400 mt-1">
+          Sau đó chạy: <code className="bg-gray-100 px-1 rounded text-[10px]">.\network-inventory.ps1 --first 192.168.1.1 --last 192.168.1.254 --community public</code>
         </p>
       </div>
 
@@ -244,11 +249,12 @@ export function AgentTab({ customerId }: { customerId: string }) {
       <div className="bg-white rounded-xl border border-border/50 p-4">
         <h3 className="text-sm font-semibold text-gray-900 mb-2">Hướng dẫn</h3>
         <ol className="space-y-1.5 text-xs text-gray-600 list-decimal list-inside">
-          <li>Nhấn <strong>Tải Script</strong> để tải file script chạy trên máy khách</li>
+          <li>Nhấn <strong>Tải Script</strong> để tải script Agent chạy trên máy khách</li>
           <li>Chép file <code className="bg-gray-100 px-1 rounded text-[10px]">.bat</code> hay <code className="bg-gray-100 px-1 rounded text-[10px]">.sh</code> sang máy cần thu thập</li>
           <li>Chạy với quyền <strong>Administrator</strong> (Windows) hoặc <strong>root</strong> (Linux/macOS)</li>
           <li>Chế độ <strong>Đầy đủ</strong>: Script tự động tải GLPI Agent, chạy kiểm kê và gửi JSON về CRM</li>
           <li>Chế độ <strong>Nhanh</strong>: Dùng PowerShell thuần, không cần tải thêm. Ít thông tin chi tiết hơn</li>
+          <li>Thiết bị mạng: Cài <strong>glpi-agent</strong> (Perl) trước, sau đó dùng wrapper script quét SNMP</li>
           <li>Kết quả hiện ở tab <strong>Cập nhật Agent</strong> để duyệt</li>
         </ol>
       </div>

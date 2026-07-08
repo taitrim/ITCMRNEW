@@ -56,15 +56,23 @@ Agent script → POST /api/agent-inventory/submit
   → Approve → tạo/Cập nhật CustomerCollectedDevice + sinh asset tag
 ```
 
-#### Quét thiết bị mạng (Network SNMP Scanner)
-Script dùng `snmpwalk` để quét subnet, phát hiện thiết bị mạng qua SNMP:
+#### Quét thiết bị mạng (GLPI Agent Network Inventory)
+
+Dùng **GLPI Agent thật** (`glpi-netdiscovery` + `glpi-netinventory` trong gói Perl):
+
+**Yêu cầu:** Cài GLPI Agent (Perl)
+- Windows: `choco install glpi-agent` hoặc tải từ [GitHub releases](https://github.com/glpi-project/glpi-agent/releases)
+- Linux: `sudo apt install glpi-agent`
+- macOS: `brew install glpi-agent`
+
+**Wrapper scripts** (download từ tab Agent → "Tải Script Network Scan"):
 
 | Script | OS | Lệnh |
 |---|---|---|
-| `network-scan.ps1` | Windows | `.\network-scan.ps1 -Subnet 192.168.1.0/24 -Community public` |
-| `network-scan.sh` | Linux/macOS | `./network-scan.sh -s 192.168.1.0/24 -c public` |
+| `network-inventory.ps1` | Windows | `.\network-inventory.ps1 -FirstIP 192.168.1.1 -LastIP 192.168.1.254 -Credentials "version:2c,community:public"` |
+| `network-inventory.sh` | Linux/macOS | `./network-inventory.sh --first 192.168.1.1 --last 192.168.1.254 --community public` |
 
-**Tự động:** ping sweep → SNMP query từng IP → sysDescr, ifTable (ports), MAC table, LLDP neighbors, serial, firmware → auto-detect manufacturer + device type → xuất JSON → POST về CRM.
+**Quy trình:** Script gọi `glpi-netdiscovery` (tìm thiết bị trong dải IP) → `glpi-netinventory` (lấy chi tiết từng thiết bị) → gửi JSON chuẩn GLPI về CRM.
 
 Có thể import thủ công qua tab Agent (paste JSON hoặc upload file `.json` từ GLPI Network Inventory).
 

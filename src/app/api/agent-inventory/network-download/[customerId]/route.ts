@@ -1,6 +1,7 @@
-/* ===== Network SNMP Scanner Download API =====
+/* ===== GLPI Agent Network Inventory Wrapper Download API =====
  *
- * Serve scripts: network-scan.ps1 (Windows) / network-scan.sh (Linux/macOS)
+ * Serve wrapper scripts: network-inventory.ps1 (Windows) / network-inventory.sh (Linux/macOS)
+ * Các script này gọi glpi-netdiscovery + glpi-netinventory thật (trong gói GLPI Agent Perl)
  * Được gọi từ tab Agent → "Tải Script Network Scan"
  */
 
@@ -45,10 +46,10 @@ export async function GET(
   let script: string;
 
   if (osParam === "linux" || osParam === "mac") {
-    filename = "network-scan.sh";
+    filename = "network-inventory.sh";
     script = loadScript(filename);
   } else {
-    filename = "network-scan.ps1";
+    filename = "network-inventory.ps1";
     script = loadScript(filename);
   }
 

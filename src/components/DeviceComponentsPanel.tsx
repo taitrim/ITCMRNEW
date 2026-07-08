@@ -194,7 +194,7 @@ function OverviewSection({ c }: { c: Components }) {
             <div key={i} className="flex items-center gap-2 px-2 py-1 bg-gray-50 rounded">
               <span className="text-[10px] text-gray-400 w-5 shrink-0">{i + 1}.</span>
               <div className="flex-1 min-w-0">
-                <div className="text-[11px] text-gray-800 font-medium truncate">{s.model || s.name || "?"}</div>
+                <div className="text-[11px] text-gray-800 font-medium truncate">{s.model || "?"}</div>
                 <div className="text-[9px] text-gray-400">{s.disksize ? fmtMb(s.disksize) : "?"}{s.interface ? ` · ${s.interface}` : ""}{s.type ? ` · ${s.type}` : ""}</div>
               </div>
               {s.disksize && <div className="text-[11px] text-gray-600 font-semibold shrink-0">{fmtMb(s.disksize)}</div>}
