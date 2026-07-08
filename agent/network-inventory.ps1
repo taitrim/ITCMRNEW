@@ -1,17 +1,12 @@
 <#
 .SYNOPSIS
-  Network Inventory Wrapper — using glpi-netdiscovery + glpi-netinventory
+  Network Inventory Wrapper - using glpi-netdiscovery + glpi-netinventory
 .DESCRIPTION
   Calls official GLPI Agent tools to scan network and collect inventory
   of network devices (switch, router, firewall, AP...).
 
-  REQUIRES: GLPI Agent (Perl) installed — contains glpi-netdiscovery + glpi-netinventory
-
-  Install GLPI Agent:
-    Windows: choco install glpi-agent
-             winget install glpi-agent
-    Linux:   sudo apt install glpi-agent
-    macOS:   brew install glpi-agent
+  Auto-installs GLPI Agent if not found (Windows: winget/MSI)
+  On Linux/macOS: run with native package manager before this script.
 
 .PARAMETER FirstIP
   First IP of subnet to scan (e.g. "192.168.1.1")
@@ -23,12 +18,14 @@
   CRM API URL (e.g. "https://crm.company.com/api/agent-inventory/network-import?customerId=XXX")
 .PARAMETER OutputFile
   Save JSON to file (optional)
+.PARAMETER AutoInstall
+  Auto-install GLPI Agent without prompting (default: prompt)
 
 .EXAMPLE
   .\network-inventory.ps1 -FirstIP 192.168.1.1 -LastIP 192.168.1.254 -Credentials "version:2c,community:public"
 
 .EXAMPLE
-  .\network-inventory.ps1 -FirstIP 10.0.0.1 -LastIP 10.0.0.254 -Credentials "version:2c,community:crmro" -CrmUrl "https://crm.company.com/api/agent-inventory/network-import?customerId=abc"
+  .\network-inventory.ps1 -FirstIP 10.0.0.1 -LastIP 10.0.0.254 -Credentials "version:2c,community:crmro" -CrmUrl "https://crm.company.com/api/agent-inventory/network-import?customerId=abc" -AutoInstall
 #>
 
 param(
@@ -38,7 +35,8 @@ param(
   [string]$LastIP,
   [string]$Credentials = "version:2c,community:public",
   [string]$CrmUrl = "",
-  [string]$OutputFile = ""
+  [string]$OutputFile = "",
+  [switch]$AutoInstall = $false
 )
 
 # ─── Helper: find command ────────────────────────────────────
@@ -64,27 +62,109 @@ Write-Host "  CRM Network Inventory - GLPI Agent" -ForegroundColor Cyan
 Write-Host "============================================" -ForegroundColor Cyan
 Write-Host ""
 
-# ─── Check GLPI Agent ───────────────────────────────────────
+# ─── GLPI Agent version ─────────────────────────────────────
+$GLPI_VERSION = "1.18"
+
+# ─── Check / Install GLPI Agent ─────────────────────────────
+function Install-GLPI-Agent {
+  Write-Host "[*] GLPI Agent not found. Attempting auto-install..." -ForegroundColor Yellow
+
+  # Method 1: winget
+  $winget = Get-Command "winget" -ErrorAction SilentlyContinue
+  if ($winget) {
+    Write-Host "    Trying winget install glpi-agent..." -ForegroundColor Gray
+    $result = & winget install "GLPI-Agent" --accept-package-agreements --silent 2>&1
+    if ($LASTEXITCODE -eq 0) {
+      Write-Host "[OK] Installed via winget." -ForegroundColor Green
+      return $true
+    }
+    Write-Host "    winget failed (code: $LASTEXITCODE). Trying next method..." -ForegroundColor DarkYellow
+  }
+
+  # Method 2: Download MSI and install silently (needs admin)
+  $isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+  if ($isAdmin) {
+    $msiUrl = "https://github.com/glpi-project/glpi-agent/releases/download/v$GLPI_VERSION/GLPI-Agent-$GLPI_VERSION-x64.msi"
+    $msiPath = "$env:TEMP\GLPI-Agent-$GLPI_VERSION-x64.msi"
+    Write-Host "    Downloading GLPI Agent MSI..." -ForegroundColor Gray
+    try {
+      Invoke-WebRequest -Uri $msiUrl -OutFile $msiPath -TimeoutSec 60 -ErrorAction Stop
+      Write-Host "    Installing MSI silently..." -ForegroundColor Gray
+      Start-Process msiexec.exe -ArgumentList "/i `"$msiPath`" /quiet /norestart" -Wait -NoNewWindow
+      Remove-Item $msiPath -Force -ErrorAction SilentlyContinue
+      Write-Host "[OK] Installed via MSI." -ForegroundColor Green
+      return $true
+    } catch {
+      Write-Host "    MSI download or install failed: $_" -ForegroundColor DarkYellow
+    }
+  } else {
+    Write-Host "    MSI install requires Administrator privileges." -ForegroundColor DarkYellow
+    Write-Host "    Right-click the script and select 'Run as Administrator'." -ForegroundColor DarkYellow
+  }
+
+  # Method 3: Download portable ZIP, extract to temp, use directly
+  Write-Host "    Trying portable ZIP..." -ForegroundColor Gray
+  $zipUrl = "https://github.com/glpi-project/glpi-agent/releases/download/v$GLPI_VERSION/GLPI-Agent-$GLPI_VERSION-x64.zip"
+  $zipPath = "$env:TEMP\glpi-agent.zip"
+  $extractPath = "$env:TEMP\glpi-agent-portable"
+  try {
+    Invoke-WebRequest -Uri $zipUrl -OutFile $zipPath -TimeoutSec 60 -ErrorAction Stop
+    Expand-Archive -Path $zipPath -DestinationPath $extractPath -Force -ErrorAction Stop
+    Remove-Item $zipPath -Force -ErrorAction SilentlyContinue
+    # Add bin dirs to PATH for this session
+    $binPaths = @(
+      "$extractPath\GLPI-Agent\bin",
+      "$extractPath\GLPI-Agent\perl\bin",
+      "$extractPath\GLPI-Agent\perl\site\bin"
+    )
+    foreach ($bp in $binPaths) {
+      if (Test-Path $bp) {
+        $env:Path = "$bp;$env:Path"
+      }
+    }
+    Write-Host "[OK] Extracted portable GLPI Agent." -ForegroundColor Green
+    return $true
+  } catch {
+    Write-Host "    Portable ZIP failed: $_" -ForegroundColor DarkYellow
+  }
+
+  return $false
+}
+
+# Check and auto-install
 $netdiscovery = Find-Command "glpi-netdiscovery"
 $netinventory = Find-Command "glpi-netinventory"
 
-if (-not $netdiscovery -and -not $netinventory) {
-  Write-Host "[!] GLPI Agent not installed." -ForegroundColor Yellow
-  Write-Host "    Install:" -ForegroundColor Yellow
-  Write-Host "      choco install glpi-agent" -ForegroundColor Yellow
-  Write-Host "      winget install glpi-agent" -ForegroundColor Yellow
-  Write-Host "      Download: https://github.com/glpi-project/glpi-agent/releases" -ForegroundColor Yellow
-  exit 1
+if (-not $netdiscovery -or -not $netinventory) {
+  $shouldInstall = $AutoInstall
+  if (-not $shouldInstall) {
+    Write-Host "[?] GLPI Agent not found. Install automatically? (Y/N)" -ForegroundColor Yellow
+    $response = Read-Host "    "
+    $shouldInstall = ($response -eq "Y" -or $response -eq "y" -or $response -eq "yes")
+  }
+
+  if ($shouldInstall) {
+    $installed = Install-GLPI-Agent
+    if ($installed) {
+      # Re-check after install
+      $netdiscovery = Find-Command "glpi-netdiscovery"
+      $netinventory = Find-Command "glpi-netinventory"
+    }
+  }
+
+  if (-not $netdiscovery -or -not $netinventory) {
+    Write-Host "[!] GLPI Agent still not available." -ForegroundColor Red
+    Write-Host "    Install manually:" -ForegroundColor Yellow
+    Write-Host "      winget install glpi-agent" -ForegroundColor Yellow
+    Write-Host "      choco install glpi-agent" -ForegroundColor Yellow
+    Write-Host "      https://github.com/glpi-project/glpi-agent/releases" -ForegroundColor Yellow
+    exit 1
+  }
 }
 
-if (-not $netdiscovery) {
-  Write-Host "[!] glpi-netdiscovery not found. Check GLPI Agent install." -ForegroundColor Red
-  exit 1
-}
-if (-not $netinventory) {
-  Write-Host "[!] glpi-netinventory not found. Check GLPI Agent install." -ForegroundColor Red
-  exit 1
-}
+Write-Host "[OK] glpi-netdiscovery: $netdiscovery" -ForegroundColor Green
+Write-Host "[OK] glpi-netinventory: $netinventory" -ForegroundColor Green
+Write-Host ""
 
 Write-Host "[OK] glpi-netdiscovery: $netdiscovery" -ForegroundColor Green
 Write-Host "[OK] glpi-netinventory: $netinventory" -ForegroundColor Green
