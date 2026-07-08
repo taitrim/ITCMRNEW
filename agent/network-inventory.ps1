@@ -414,8 +414,12 @@ if ($hasNetdiscovery -and $hasNetDiscoveryModule) {
       $discWarnings | ForEach-Object { Write-Host "    [agent] $_" -ForegroundColor DarkYellow }
     }
 
-    # Collect XML results
-    $xmlFiles = Get-ChildItem -Path $discoveryDir -Filter "*.xml" -ErrorAction SilentlyContinue
+    # Collect XML results (glpi-netdiscovery --save saves to <dir>/netdiscovery/*.xml)
+    $netdiscoSubdir = Join-Path $discoveryDir "netdiscovery"
+    $xmlFiles = @()
+    if (Test-Path $netdiscoSubdir) {
+      $xmlFiles = Get-ChildItem -Path $netdiscoSubdir -Filter "*.xml" -ErrorAction SilentlyContinue
+    }
     if ($xmlFiles.Count -eq 0) {
       Write-Host "[!] Discovery found no devices." -ForegroundColor Yellow
     } else {
@@ -471,15 +475,23 @@ if ($hasNetdiscovery -and $hasNetDiscoveryModule) {
     Write-Host ""
     Write-Host "[OK] Inventory complete." -ForegroundColor Green
 
-    # Collect inventory XML
-    $invXmlFiles = Get-ChildItem -Path $inventoryDir -Filter "*.xml" -ErrorAction SilentlyContinue
+    # Collect inventory XML (glpi-netinventory --save saves to <dir>/netinventory/*.xml)
+    $netinvSubdir = Join-Path $inventoryDir "netinventory"
+    $invXmlFiles = @()
+    if (Test-Path $netinvSubdir) {
+      $invXmlFiles = Get-ChildItem -Path $netinvSubdir -Filter "*.xml" -ErrorAction SilentlyContinue
+    }
   }
 
-  # ─── Step 3: Build JSON and send to CRM ───────────────────
+  # ─── Show results ────────────────────────────────────────
   Write-Host ""
   Write-Host "[*] Results:" -ForegroundColor Gray
-  Write-Host "    Discovery XML: $discoveryDir" -ForegroundColor White
-  Write-Host "    Inventory XML: $($discoveryDir -replace '-netdiscovery-', '-netinventory-')" -ForegroundColor White
+  $netdiscoSubdir = Join-Path $discoveryDir "netdiscovery"
+  Write-Host "    Discovery XML: $netdiscoSubdir" -ForegroundColor White
+  if ($inventoryDir) {
+    $netinvSubdir = Join-Path $inventoryDir "netinventory"
+    Write-Host "    Inventory XML: $netinvSubdir" -ForegroundColor White
+  }
 } else {
   # Modules not available; rely on fallback data from above
 }
