@@ -41,6 +41,17 @@ param(
 
 # ─── Find GLPI Agent installation directory ─────────────────
 function Find-GLPIDir {
+  # Where is glpi-agent.exe?
+  $agentPath = (Get-Command "glpi-agent.exe" -ErrorAction SilentlyContinue).Source
+  if (-not $agentPath) {
+    $agentPath = (Get-Command "glpi-agent" -ErrorAction SilentlyContinue).Source
+  }
+  if (-not $agentPath) {
+    $where = where.exe "glpi-agent" 2>$null
+    if ($where) { $agentPath = $where[0] }
+  }
+  if ($agentPath) { return (Get-Item $agentPath).DirectoryName }
+  # Search common install locations
   $searches = @(
     "$env:ProgramFiles\GLPI-Agent",
     "${env:ProgramFiles(x86)}\GLPI-Agent",
@@ -50,11 +61,6 @@ function Find-GLPIDir {
   foreach ($dir in $searches) {
     if (Test-Path $dir) { return $dir }
   }
-  # Search for glpi-agent.exe anywhere in ProgramFiles
-  $match = Get-ChildItem -Path "$env:ProgramFiles" -Filter "glpi-agent.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
-  if ($match) { return $match.DirectoryName }
-  $match = Get-ChildItem -Path "${env:ProgramFiles(x86)}" -Filter "glpi-agent.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
-  if ($match) { return $match.DirectoryName }
   return $null
 }
 
@@ -70,21 +76,27 @@ function Find-Command {
   # Method 3: Search in GLPI Agent install directory
   $glpiDir = Find-GLPIDir
   if ($glpiDir) {
-    Write-Host "    [debug] GLPI-Agent dir: $glpiDir" -ForegroundColor DarkGray
-    # List all executables in bin dir
-    $binDir = Join-Path $glpiDir "bin"
-    if (Test-Path $binDir) {
-      $files = Get-ChildItem -Path $binDir -Filter "$Name*" -ErrorAction SilentlyContinue
-      if ($files) { return $files[0].FullName }
-      # Try partial match
-      $partial = $Name -replace "glpi-", ""
-      $files = Get-ChildItem -Path $binDir -Filter "*$partial*" -ErrorAction SilentlyContinue
-      if ($files) { return $files[0].FullName }
-      # Debug: show all .exe files
-      Write-Host "    [debug] Files in $binDir :" -ForegroundColor DarkGray
-      Get-ChildItem -Path $binDir -Filter "*.exe" -ErrorAction SilentlyContinue | ForEach-Object {
-        Write-Host "      $($_.Name)" -ForegroundColor DarkGray
-      }
+    Write-Host "    [debug] GLPI-Agent root: $glpiDir" -ForegroundColor DarkGray
+    # List directory structure (first level)
+    Write-Host "    [debug] Subdirs:" -ForegroundColor DarkGray
+    Get-ChildItem -Path $glpiDir -Directory -ErrorAction SilentlyContinue | ForEach-Object {
+      Write-Host "      $($_.Name)" -ForegroundColor DarkGray
+    }
+    # Search recursively in the whole GLPI-Agent tree for the command
+    $found = Get-ChildItem -Path $glpiDir -Filter "$Name*" -Recurse -ErrorAction SilentlyContinue |
+      Where-Object { -not $_.PSIsContainer } |
+      Select-Object -First 1
+    if ($found) { return $found.FullName }
+    # Partial name fallback
+    $partial = $Name -replace "glpi-", ""
+    $found = Get-ChildItem -Path $glpiDir -Filter "*$partial*" -Recurse -ErrorAction SilentlyContinue |
+      Where-Object { -not $_.PSIsContainer } |
+      Select-Object -First 1
+    if ($found) { return $found.FullName }
+    # Debug: show ALL .exe in GLPI-Agent tree
+    Write-Host "    [debug] All .exe/.bat files in GLPI-Agent:" -ForegroundColor DarkGray
+    Get-ChildItem -Path $glpiDir -Include "*.exe","*.bat","*.pl" -Recurse -ErrorAction SilentlyContinue | ForEach-Object {
+      Write-Host "      $($_.FullName)" -ForegroundColor DarkGray
     }
   }
   return $null
