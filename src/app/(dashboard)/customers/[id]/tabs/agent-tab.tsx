@@ -278,7 +278,7 @@ export function AgentTab({ customerId }: { customerId: string }) {
                   <p className="text-[10px] text-blue-800 font-medium">Cách chạy</p>
                   <code className="block text-[10px] text-blue-700 bg-blue-100 px-2 py-1.5 rounded">
                     {downloadOS === "windows"
-                      ? `.\\network-inventory.ps1 -FirstIP 192.168.1.1 -LastIP 192.168.1.254 -Credentials "version:2c,community:public"`
+                      ? `.\\network-inventory.bat -FirstIP 192.168.1.1 -LastIP 192.168.1.254 -Credentials "version:2c,community:public"`
                       : `./network-inventory.sh --first 192.168.1.1 --last 192.168.1.254 --community public`}
                   </code>
                   <p className="text-[10px] text-blue-600">
