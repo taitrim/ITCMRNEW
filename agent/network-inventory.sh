@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # ============================================
-#  Network Inventory Wrapper — GLPI Agent
-#  Dùng glpi-netdiscovery + glpi-netinventory thật
+#  Network Inventory Wrapper - GLPI Agent
+#  Uses glpi-netdiscovery + glpi-netinventory
 # ============================================
-# YÊU CẦU: GLPI Agent (Perl) đã cài
+# REQUIRES: GLPI Agent (Perl) installed
 #   apt install glpi-agent
 #   brew install glpi-agent
 # ============================================
@@ -13,26 +13,26 @@ usage() {
   cat <<EOF
 Usage: $0 [OPTIONS]
 
-Wrapper cho GLPI Agent — quét mạng SNMP và gửi inventory về CRM.
+Wrapper for GLPI Agent - scan network SNMP and send inventory to CRM.
 
-YÊU CẦU: glpi-netdiscovery + glpi-netinventory (trong gói glpi-agent)
+REQUIRES: glpi-netdiscovery + glpi-netinventory (in glpi-agent package)
 
 OPTIONS:
-  --first       IP đầu tiên (bắt buộc)
-  --last        IP cuối cùng   (bắt buộc)
-  --community   SNMP community (mặc định: public)
-  --version     SNMP version   (mặc định: 2c)
-  --crm-url     URL CRM API để POST kết quả (tuỳ chọn)
-  --output      Ghi JSON ra file (tuỳ chọn)
+  --first       First IP of subnet (required)
+  --last        Last IP of subnet  (required)
+  --community   SNMP community     (default: public)
+  --version     SNMP version       (default: 2c)
+  --crm-url     CRM API URL to POST results (optional)
+  --output      Save JSON to file  (optional)
 
-VÍ DỤ:
+EXAMPLES:
   $0 --first 192.168.1.1 --last 192.168.1.254
   $0 --first 10.0.0.1 --last 10.0.0.254 --crm-url "https://crm.example.com/api/agent-inventory/network-import?customerId=abc"
 EOF
   exit 1
 }
 
-# ─── Parse args ──────────────────────────────────────────────
+# --- Parse args -------------------------------------------------
 FIRST=""
 LAST=""
 COMMUNITY="public"
@@ -54,13 +54,13 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ -z "$FIRST" || -z "$LAST" ]]; then
-  echo "[!] --first và --last là bắt buộc"
+  echo "[!] --first and --last are required"
   usage
 fi
 
 CREDENTIALS="version:${VERSION},community:${COMMUNITY}"
 
-# ─── Kiểm tra GLPI Agent ────────────────────────────────────
+# --- Check GLPI Agent -------------------------------------------
 NETDISCOVERY=""
 NETINVENTORY=""
 
@@ -81,22 +81,22 @@ elif [ -f "/usr/local/bin/glpi-netinventory" ]; then
 fi
 
 if [[ -z "$NETDISCOVERY" || -z "$NETINVENTORY" ]]; then
-  echo "[!] GLPI Agent chưa được cài đặt."
-  echo "    Cài đặt: sudo apt install glpi-agent"
+  echo "[!] GLPI Agent not installed."
+  echo "    Install: sudo apt install glpi-agent"
   echo "            brew install glpi-agent"
   exit 1
 fi
 
 echo "============================================"
-echo "  CRM Network Inventory — GLPI Agent"
+echo "  CRM Network Inventory - GLPI Agent"
 echo "============================================"
 echo ""
 echo "[OK] glpi-netdiscovery: $NETDISCOVERY"
 echo "[OK] glpi-netinventory: $NETINVENTORY"
 echo ""
 
-# ─── Bước 1: Network Discovery ──────────────────────────────
-echo "[*] Bước 1: Network Discovery ($FIRST → $LAST)..."
+# --- Step 1: Network Discovery ----------------------------------
+echo "[*] Step 1: Network Discovery ($FIRST -> $LAST)..."
 echo "    Credentials: $CREDENTIALS"
 
 DISCOVERY_OUTPUT=$(mktemp /tmp/crm-netdiscovery-XXXXXX.xml)
@@ -104,20 +104,20 @@ DISCOVERY_OUTPUT=$(mktemp /tmp/crm-netdiscovery-XXXXXX.xml)
 if ! "$NETDISCOVERY" --first "$FIRST" --last "$LAST" \
        --credentials "$CREDENTIALS" \
        --output "$DISCOVERY_OUTPUT" 2>&1; then
-  echo "[!] Lỗi discovery."
+  echo "[!] Discovery error."
   rm -f "$DISCOVERY_OUTPUT"
   exit 1
 fi
 
 if [[ ! -s "$DISCOVERY_OUTPUT" ]]; then
-  echo "[!] Discovery không tìm thấy thiết bị nào."
+  echo "[!] Discovery found no devices."
   rm -f "$DISCOVERY_OUTPUT"
   exit 0
 fi
 
-echo "[OK] Discovery hoàn tất."
+echo "[OK] Discovery complete."
 
-# ─── Đọc danh sách IP từ XML ────────────────────────────────
+# --- Read IP list from XML --------------------------------------
 DISCOVERED_IPS=()
 while IFS= read -r line; do
   ip=$(echo "$line" | sed -n 's/.*<IP>\([^<]*\)<\/IP>.*/\1/p')
@@ -127,18 +127,18 @@ while IFS= read -r line; do
 done < <(grep -o '<IP>[^<]*</IP>' "$DISCOVERY_OUTPUT" || true)
 
 if [[ ${#DISCOVERED_IPS[@]} -eq 0 ]]; then
-  echo "[!] Không tìm thấy thiết bị SNMP nào."
+  echo "[!] No SNMP devices found in range."
   rm -f "$DISCOVERY_OUTPUT"
   exit 0
 fi
 
-echo "[OK] Tìm thấy ${#DISCOVERED_IPS[@]} thiết bị:"
+echo "[OK] Found ${#DISCOVERED_IPS[@]} devices:"
 for ip in "${DISCOVERED_IPS[@]}"; do
   echo "    $ip"
 done
 echo ""
 
-# ─── Bước 2: Network Inventory từng thiết bị ────────────────
+# --- Step 2: Network Inventory each device ----------------------
 COUNT=0
 TOTAL=${#DISCOVERED_IPS[@]}
 INVENTORY_FILES=()
@@ -155,17 +155,17 @@ for ip in "${DISCOVERED_IPS[@]}"; do
     echo "    OK"
     INVENTORY_FILES+=("$INV_OUTPUT")
   else
-    echo "    Lỗi — bỏ qua"
+    echo "    Error - skipping"
     rm -f "$INV_OUTPUT"
   fi
 done
 
 echo ""
-echo "[OK] Inventory hoàn tất."
+echo "[OK] Inventory complete."
 
-# ─── Bước 3: Gửi về CRM ─────────────────────────────────────
+# --- Step 3: Send to CRM ----------------------------------------
 if [[ -n "$CRM_URL" ]]; then
-  echo "[*] Đang gửi kết quả về CRM..."
+  echo "[*] Sending results to CRM..."
 
   # Build IP list JSON
   IP_LIST="["
@@ -201,7 +201,7 @@ if [[ -n "$CRM_URL" ]]; then
 EOF
 )
 
-  # Gửi POST
+  # Send POST
   HTTP_CODE=$(curl -s -o /tmp/crm-response.json -w "%{http_code}" \
     -X POST "$CRM_URL" \
     -H "Content-Type: application/json" \
@@ -209,33 +209,33 @@ EOF
     --max-time 120)
 
   if [[ "$HTTP_CODE" == 2* ]]; then
-    echo "[OK] Đã gửi thành công! (HTTP $HTTP_CODE)"
+    echo "[OK] Sent successfully! (HTTP $HTTP_CODE)"
     cat /tmp/crm-response.json | python3 -m json.tool 2>/dev/null || cat /tmp/crm-response.json
   else
-    echo "[!] Lỗi gửi về CRM (HTTP $HTTP_CODE)"
+    echo "[!] Error sending to CRM (HTTP $HTTP_CODE)"
     cat /tmp/crm-response.json 2>/dev/null || true
   fi
 fi
 
 echo ""
-echo "[*] Kết quả XML lưu tại:"
+echo "[*] Results saved at:"
 echo "    Discovery: $DISCOVERY_OUTPUT"
 for f in "${INVENTORY_FILES[@]}"; do
   echo "    $f"
 done
 
-# Ghi ra output file nếu được yêu cầu
+# Save output file if requested
 if [[ -n "$OUTPUT" ]]; then
   echo "$PAYLOAD" > "$OUTPUT"
-  echo "[OK] Đã ghi JSON ra: $OUTPUT"
+  echo "[OK] Saved JSON to: $OUTPUT"
 fi
 
 echo ""
 echo "============================================"
-echo "  HOÀN TẤT"
+echo "  DONE"
 echo "============================================"
 
 echo ""
-echo "[*] Để inject trực tiếp vào GLPI server:"
+echo "[*] To inject directly into GLPI server:"
 echo "    glpi-injector -f \"$DISCOVERY_OUTPUT\" --url https://glpi.company.com/front/inventory.php"
 echo ""
