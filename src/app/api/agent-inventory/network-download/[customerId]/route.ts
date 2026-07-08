@@ -15,14 +15,11 @@ import { auth } from "@/lib/auth";
 import * as fs from "fs";
 import * as path from "path";
 
-const SCRIPT_CACHE: Record<string, string> = {};
-
 function loadScript(filename: string): string {
-  if (SCRIPT_CACHE[filename]) return SCRIPT_CACHE[filename];
+  // Always read from disk — no cache, so updates take effect immediately
   const scriptPath = path.join(process.cwd(), "agent", filename);
   if (fs.existsSync(scriptPath)) {
-    SCRIPT_CACHE[filename] = fs.readFileSync(scriptPath, "utf-8");
-    return SCRIPT_CACHE[filename];
+    return fs.readFileSync(scriptPath, "utf-8");
   }
   throw new Error(`Script not found: ${filename}`);
 }
