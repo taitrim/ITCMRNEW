@@ -3,6 +3,8 @@
  * Serve wrapper scripts: network-inventory.ps1 (Windows) / network-inventory.sh (Linux/macOS)
  * Các script này gọi glpi-netdiscovery + glpi-netinventory thật (trong gói GLPI Agent Perl)
  * Được gọi từ tab Agent → "Tải Script Network Scan"
+ *
+ * Khi download, inject CRM_URL + customerId vào script để tự động POST kết quả về CRM.
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -12,7 +14,6 @@ import * as fs from "fs";
 import * as path from "path";
 
 function loadScript(filename: string): string {
-  // Script files stored in agent/ directory
   const scriptPath = path.join(process.cwd(), "agent", filename);
   if (fs.existsSync(scriptPath)) {
     return fs.readFileSync(scriptPath, "utf-8");
@@ -48,9 +49,13 @@ export async function GET(
   if (osParam === "linux" || osParam === "mac") {
     filename = "network-inventory.sh";
     script = loadScript(filename);
+    // Inject CRM URL into bash script — replaces default CRM_URL=""
+    script = script.replace('CRM_URL=""', `CRM_URL="${crmSubmitUrl}"`);
   } else {
     filename = "network-inventory.ps1";
     script = loadScript(filename);
+    // Inject CRM URL into PowerShell script — replaces default $CrmUrl = ""
+    script = script.replace('[string]$CrmUrl = ""', `[string]$CrmUrl = "${crmSubmitUrl}"`);
   }
 
   return new Response(script, {

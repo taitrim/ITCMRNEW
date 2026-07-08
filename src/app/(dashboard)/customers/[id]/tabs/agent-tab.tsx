@@ -24,6 +24,7 @@ export function AgentTab({ customerId }: { customerId: string }) {
   const [showKey, setShowKey] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
   const [msg, setMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [collectionType, setCollectionType] = useState<"pc" | "network">("pc");
   const [downloadMode, setDownloadMode] = useState<"glpi" | "simple">("glpi");
   const [downloadOS, setDownloadOS] = useState<string>(detectOS());
 
@@ -121,81 +122,172 @@ export function AgentTab({ customerId }: { customerId: string }) {
       <div className="bg-white rounded-xl border border-border/50 p-4">
         <h3 className="text-sm font-semibold text-gray-900 mb-1">Tải Agent Script</h3>
         <p className="text-[11px] text-muted-foreground mb-3">
-          Script chạy trên máy tính tại khách hàng để thu thập thông tin thiết bị. Kết quả sẽ được gửi về CRM để xem xét.
+          Script chạy trên máy khách để thu thập thiết bị và gửi về CRM xem xét.
         </p>
 
         {info.agentEnabled ? (
           <div className="space-y-3">
-            {/* Chọn chế độ thu thập */}
+            {/* Loại thu thập: PC vs Network */}
             <div>
-              <label className="text-[10px] text-gray-500 font-medium">Chế độ thu thập</label>
+              <label className="text-[10px] text-gray-500 font-medium">Loại thiết bị</label>
               <div className="flex gap-2 mt-1">
                 <button
-                  onClick={() => setDownloadMode("glpi")}
+                  onClick={() => setCollectionType("pc")}
                   className={cn(
                     "flex-1 h-8 rounded-lg border text-xs font-medium transition-colors",
-                    downloadMode === "glpi"
+                    collectionType === "pc"
                       ? "border-primary bg-primary/5 text-primary"
                       : "border-gray-200 text-gray-500 hover:border-gray-300"
                   )}
                 >
-                  Đầy đủ (GLPI Agent)
+                  PC / Laptop
                 </button>
                 <button
-                  onClick={() => setDownloadMode("simple")}
+                  onClick={() => setCollectionType("network")}
                   className={cn(
                     "flex-1 h-8 rounded-lg border text-xs font-medium transition-colors",
-                    downloadMode === "simple"
+                    collectionType === "network"
                       ? "border-primary bg-primary/5 text-primary"
                       : "border-gray-200 text-gray-500 hover:border-gray-300"
                   )}
                 >
-                  Nhanh (PowerShell)
+                  Mạng (SNMP)
                 </button>
               </div>
-              <p className="text-[10px] text-muted-foreground mt-1">
-                {downloadMode === "glpi"
-                  ? "Tải GLPI Agent — đầy đủ (CPU, RAM, disk, network, software, users). Cần internet."
-                  : "Chạy PowerShell — nhanh, không cần tải thêm. Ít thông tin hơn."}
-              </p>
             </div>
 
-            {/* Chọn hệ điều hành */}
-            {downloadMode === "glpi" && (
-              <div>
-                <label className="text-[10px] text-gray-500 font-medium">Hệ điều hành máy đích</label>
-                <div className="flex gap-2 mt-1">
-                  {(["windows", "linux", "mac"] as const).map((o) => (
+            {/* ─── PC / Laptop mode ─── */}
+            {collectionType === "pc" && (
+              <>
+                {/* Chọn chế độ thu thập */}
+                <div>
+                  <label className="text-[10px] text-gray-500 font-medium">Chế độ thu thập</label>
+                  <div className="flex gap-2 mt-1">
                     <button
-                      key={o}
-                      onClick={() => setDownloadOS(o)}
+                      onClick={() => setDownloadMode("glpi")}
                       className={cn(
-                        "h-8 px-3 rounded-lg border text-xs font-medium transition-colors",
-                        downloadOS === o
+                        "flex-1 h-8 rounded-lg border text-xs font-medium transition-colors",
+                        downloadMode === "glpi"
                           ? "border-primary bg-primary/5 text-primary"
                           : "border-gray-200 text-gray-500 hover:border-gray-300"
                       )}
                     >
-                      {o === "windows" ? "Windows" : o === "linux" ? "Linux" : "macOS"}
+                      Đầy đủ (GLPI Agent)
                     </button>
-                  ))}
+                    <button
+                      onClick={() => setDownloadMode("simple")}
+                      className={cn(
+                        "flex-1 h-8 rounded-lg border text-xs font-medium transition-colors",
+                        downloadMode === "simple"
+                          ? "border-primary bg-primary/5 text-primary"
+                          : "border-gray-200 text-gray-500 hover:border-gray-300"
+                      )}
+                    >
+                      Nhanh (PowerShell)
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground mt-1">
+                    {downloadMode === "glpi"
+                      ? "Tải GLPI Agent — đầy đủ (CPU, RAM, disk, network, software, users). Cần internet."
+                      : "Chạy PowerShell — nhanh, không cần tải thêm. Ít thông tin hơn."}
+                  </p>
                 </div>
-              </div>
+
+                {/* Chọn hệ điều hành */}
+                {downloadMode === "glpi" && (
+                  <div>
+                    <label className="text-[10px] text-gray-500 font-medium">Hệ điều hành máy đích</label>
+                    <div className="flex gap-2 mt-1">
+                      {(["windows", "linux", "mac"] as const).map((o) => (
+                        <button
+                          key={o}
+                          onClick={() => setDownloadOS(o)}
+                          className={cn(
+                            "h-8 px-3 rounded-lg border text-xs font-medium transition-colors",
+                            downloadOS === o
+                              ? "border-primary bg-primary/5 text-primary"
+                              : "border-gray-200 text-gray-500 hover:border-gray-300"
+                          )}
+                        >
+                          {o === "windows" ? "Windows" : o === "linux" ? "Linux" : "macOS"}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Nút tải PC */}
+                <a
+                  href={downloadUrl}
+                  className="inline-flex items-center gap-2 h-9 px-4 rounded-lg bg-primary text-white text-xs font-medium hover:bg-primary/90 transition-colors"
+                >
+                  <Download size={14} />
+                  Tải Script
+                </a>
+                <p className="text-[10px] text-muted-foreground">
+                  {downloadMode === "glpi"
+                    ? "Script tự động tải GLPI Agent, chạy kiểm kê và gửi JSON về CRM."
+                    : "Chạy file .bat với quyền Administrator."}
+                </p>
+              </>
             )}
 
-            {/* Nút tải */}
-            <a
-              href={downloadUrl}
-              className="inline-flex items-center gap-2 h-9 px-4 rounded-lg bg-primary text-white text-xs font-medium hover:bg-primary/90 transition-colors"
-            >
-              <Download size={14} />
-              Tải Script
-            </a>
-            <p className="text-[10px] text-muted-foreground">
-              {downloadMode === "glpi"
-                ? "Script tự động tải GLPI Agent, chạy kiểm kê và gửi JSON về CRM."
-                : "Chạy file .bat với quyền Administrator."}
-            </p>
+            {/* ─── Mạng (SNMP) mode ─── */}
+            {collectionType === "network" && (
+              <>
+                <div>
+                  <label className="text-[10px] text-gray-500 font-medium">Hệ điều hành máy chạy scan</label>
+                  <div className="flex gap-2 mt-1">
+                    {(["windows", "linux", "mac"] as const).map((o) => (
+                      <button
+                        key={o}
+                        onClick={() => setDownloadOS(o)}
+                        className={cn(
+                          "h-8 px-3 rounded-lg border text-xs font-medium transition-colors",
+                          downloadOS === o
+                            ? "border-primary bg-primary/5 text-primary"
+                            : "border-gray-200 text-gray-500 hover:border-gray-300"
+                        )}
+                      >
+                        {o === "windows" ? "Windows" : o === "linux" ? "Linux" : "macOS"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 space-y-1.5">
+                  <p className="text-[10px] text-amber-800 font-medium">Yêu cầu</p>
+                  <ul className="text-[10px] text-amber-700 space-y-1">
+                    <li>• Cài sẵn <strong>GLPI Agent</strong> (Perl) trên máy chạy scan</li>
+                    <li>• Windows: <code className="bg-amber-100 px-1 rounded">choco install glpi-agent</code></li>
+                    <li>• Linux: <code className="bg-amber-100 px-1 rounded">sudo apt install glpi-agent</code></li>
+                    <li>• macOS: <code className="bg-amber-100 px-1 rounded">brew install glpi-agent</code></li>
+                  </ul>
+                </div>
+
+                {/* Nút tải network wrapper */}
+                <a
+                  href={`/api/agent-inventory/network-download/${customerId}?os=${downloadOS}&key=${info.agentKey}`}
+                  className="inline-flex items-center gap-2 h-9 px-4 rounded-lg bg-gray-900 text-white text-xs font-medium hover:bg-gray-800 transition-colors"
+                >
+                  <Download size={14} />
+                  Tải Script Network Scan
+                </a>
+
+                <div className="rounded-lg bg-blue-50 border border-blue-200 p-3 space-y-1.5">
+                  <p className="text-[10px] text-blue-800 font-medium">Cách chạy</p>
+                  <code className="block text-[10px] text-blue-700 bg-blue-100 px-2 py-1.5 rounded">
+                    {downloadOS === "windows"
+                      ? `.\\network-inventory.ps1 -FirstIP 192.168.1.1 -LastIP 192.168.1.254 -Credentials "version:2c,community:public"`
+                      : `./network-inventory.sh --first 192.168.1.1 --last 192.168.1.254 --community public`}
+                  </code>
+                  <p className="text-[10px] text-blue-600">
+                    Script tự động gửi kết quả về CRM (đã tích hợp sẵn URL).<br />
+                    Thay IP dải mạng và community string phù hợp.
+                  </p>
+                </div>
+              </>
+            )}
           </div>
         ) : (
           <p className="text-xs text-amber-600 bg-amber-50 rounded-lg px-3 py-2">
@@ -204,57 +296,26 @@ export function AgentTab({ customerId }: { customerId: string }) {
         )}
       </div>
 
-        {/* GLPI Network Inventory Import */}
+        {/* GLPI Network Inventory Import — manual JSON import */}
       <div className="bg-white rounded-xl border border-border/50 p-4">
         <h3 className="text-sm font-semibold text-gray-900 mb-1">📡 GLPI Network Import</h3>
         <p className="text-[11px] text-muted-foreground mb-3">
           Nhập JSON từ GLPI Network Inventory (SNMP discovery) — switch, router, firewall, AP.
+          Hoặc tải script quét mạng ở phần <strong>"Tải Agent Script" → "Mạng (SNMP)"</strong> bên trên.
         </p>
         <NetworkImportForm customerId={customerId} />
-
-        {/* Divider */}
-        <div className="border-t border-gray-100 my-3" />
-
-        {/* Download GLPI Agent wrapper script */}
-        <h4 className="text-xs font-semibold text-gray-800 mb-2">Hoặc chạy GLPI Agent quét mạng</h4>
-        <p className="text-[11px] text-muted-foreground mb-2">
-          Wrapper script gọi <code className="bg-gray-100 px-1 rounded text-[10px]">glpi-netdiscovery</code> +
-          <code className="bg-gray-100 px-1 rounded text-[10px]">glpi-netinventory</code> thật (trong gói
-          <code className="bg-gray-100 px-1 rounded text-[10px]">glpi-agent</code> Perl) — phát hiện switch,
-          router, firewall, AP và gửi về CRM.
-        </p>
-        <div className="flex gap-2">
-          <a
-            href={`/api/agent-inventory/network-download/${customerId}?os=windows`}
-            className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-gray-900 text-white text-xs font-medium hover:bg-gray-800 transition-colors"
-          >
-            <Download size={13} /> Windows (.ps1)
-          </a>
-          <a
-            href={`/api/agent-inventory/network-download/${customerId}?os=linux`}
-            className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-gray-300 text-gray-700 text-xs font-medium hover:bg-gray-50 transition-colors"
-          >
-            <Download size={13} /> Linux/macOS (.sh)
-          </a>
-        </div>
-        <p className="text-[10px] text-gray-400 mt-1">
-          Yêu cầu GLPI Agent (Perl) đã cài trên máy chạy script: <code className="bg-gray-100 px-1 rounded text-[10px]">apt install glpi-agent</code>
-        </p>
-        <p className="text-[10px] text-gray-400 mt-1">
-          Sau đó chạy: <code className="bg-gray-100 px-1 rounded text-[10px]">.\network-inventory.ps1 --first 192.168.1.1 --last 192.168.1.254 --community public</code>
-        </p>
       </div>
 
       {/* Hướng dẫn */}
       <div className="bg-white rounded-xl border border-border/50 p-4">
         <h3 className="text-sm font-semibold text-gray-900 mb-2">Hướng dẫn</h3>
         <ol className="space-y-1.5 text-xs text-gray-600 list-decimal list-inside">
+          <li>Chọn loại thiết bị: <strong>PC / Laptop</strong> hoặc <strong>Mạng (SNMP)</strong></li>
           <li>Nhấn <strong>Tải Script</strong> để tải script Agent chạy trên máy khách</li>
-          <li>Chép file <code className="bg-gray-100 px-1 rounded text-[10px]">.bat</code> hay <code className="bg-gray-100 px-1 rounded text-[10px]">.sh</code> sang máy cần thu thập</li>
+          <li>Chép file script sang máy cần thu thập</li>
           <li>Chạy với quyền <strong>Administrator</strong> (Windows) hoặc <strong>root</strong> (Linux/macOS)</li>
-          <li>Chế độ <strong>Đầy đủ</strong>: Script tự động tải GLPI Agent, chạy kiểm kê và gửi JSON về CRM</li>
-          <li>Chế độ <strong>Nhanh</strong>: Dùng PowerShell thuần, không cần tải thêm. Ít thông tin chi tiết hơn</li>
-          <li>Thiết bị mạng: Cài <strong>glpi-agent</strong> (Perl) trước, sau đó dùng wrapper script quét SNMP</li>
+          <li>PC/Laptop — <strong>Đầy đủ</strong>: Tự động tải GLPI Agent. <strong>Nhanh</strong>: PowerShell thuần</li>
+          <li>Mạng — Cần <strong>glpi-agent</strong> (Perl) cài sẵn, chạy với <code className="bg-gray-100 px-1 rounded text-[10px]">--first --last --community</code></li>
           <li>Kết quả hiện ở tab <strong>Cập nhật Agent</strong> để duyệt</li>
         </ol>
       </div>
