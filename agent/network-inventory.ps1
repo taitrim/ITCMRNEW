@@ -42,18 +42,32 @@ param(
 # ─── Helper: find command ────────────────────────────────────
 function Find-Command {
   param([string]$Name)
-  # Check PATH first
+  # Method 1: Get-Command (PATH check)
   $result = Get-Command $Name -ErrorAction SilentlyContinue
   if ($result) { return $result.Source }
-  # Search common GLPI Agent install locations
+  # Method 2: where.exe (Windows PATH check, more reliable)
+  $where = where.exe $Name 2>$null
+  if ($where) { return $where[0] }
+  # Method 3: Search common install locations (no depth limit)
   $searchRoots = @(
     "$env:ProgramFiles",
     "${env:ProgramFiles(x86)}",
     "$env:LOCALAPPDATA",
-    "$env:ProgramData"
+    "$env:ProgramData",
+    "$env:SystemRoot"
   )
   foreach ($root in $searchRoots) {
-    $match = Get-ChildItem -Path $root -Filter "$Name*" -Recurse -Depth 4 -ErrorAction SilentlyContinue | Select-Object -First 1
+    $match = Get-ChildItem -Path $root -Filter "$Name*" -Recurse -ErrorAction SilentlyContinue |
+      Where-Object { -not $_.PSIsContainer } |
+      Select-Object -First 1
+    if ($match) { return $match.FullName }
+  }
+  # Method 4: Search by partial name (*netdiscovery* / *netinventory*)
+  $partialName = $Name -replace "glpi-", ""
+  foreach ($root in $searchRoots) {
+    $match = Get-ChildItem -Path $root -Filter "*$partialName*" -Recurse -ErrorAction SilentlyContinue |
+      Where-Object { -not $_.PSIsContainer } |
+      Select-Object -First 1
     if ($match) { return $match.FullName }
   }
   return $null
@@ -96,13 +110,16 @@ function Install-GLPI-Agent {
   # Method 1: winget
   $winget = Get-Command "winget" -ErrorAction SilentlyContinue
   if ($winget) {
-    Write-Host "    Trying winget install glpi-agent..." -ForegroundColor Gray
-    $null = & winget install "GLPI-Agent" --accept-package-agreements --silent 2>&1
+    Write-Host "    Checking winget for GLPI Agent..." -ForegroundColor Gray
+    $null = & winget install "glpi-agent" --accept-package-agreements --silent 2>&1
+    $exitCode = $LASTEXITCODE
+    # winget returns non-zero if already installed with no upgrade available
+    # That's OK - it means the package IS installed
     if (Test-InstallSuccess) {
-      Write-Host "[OK] Installed via winget." -ForegroundColor Green
+      Write-Host "[OK] GLPI Agent found (via winget)." -ForegroundColor Green
       return $true
     }
-    Write-Host "    winget done, but binaries not found. Trying next..." -ForegroundColor DarkYellow
+    Write-Host "    winget done (code: $exitCode). Binaries not found yet. Trying next..." -ForegroundColor DarkYellow
   }
 
   # Method 2: Download MSI and install silently (needs admin)
