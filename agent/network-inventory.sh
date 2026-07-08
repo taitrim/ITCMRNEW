@@ -99,32 +99,27 @@ echo ""
 echo "[*] Step 1: Network Discovery ($FIRST -> $LAST)..."
 echo "    Credentials: $CREDENTIALS"
 
-DISCOVERY_OUTPUT=$(mktemp /tmp/crm-netdiscovery-XXXXXX.xml)
+DISCOVERY_DIR=$(mktemp -d /tmp/crm-netdiscovery-XXXXXX)
 
 if ! "$NETDISCOVERY" --first "$FIRST" --last "$LAST" \
-       --credentials "$CREDENTIALS" \
-       --output "$DISCOVERY_OUTPUT" 2>&1; then
+       --community "$COMMUNITY" \
+       --save "$DISCOVERY_DIR" 2>&1; then
   echo "[!] Discovery error."
-  rm -f "$DISCOVERY_OUTPUT"
+  rm -rf "$DISCOVERY_DIR"
   exit 1
-fi
-
-if [[ ! -s "$DISCOVERY_OUTPUT" ]]; then
-  echo "[!] Discovery found no devices."
-  rm -f "$DISCOVERY_OUTPUT"
-  exit 0
 fi
 
 echo "[OK] Discovery complete."
 
-# --- Read IP list from XML --------------------------------------
+# --- Read IP list from XML files in discovery dir ----------------
 DISCOVERED_IPS=()
-while IFS= read -r line; do
-  ip=$(echo "$line" | sed -n 's/.*<IP>\([^<]*\)<\/IP>.*/\1/p')
+for xml_file in "$DISCOVERY_DIR"/netdiscovery/*.xml; do
+  [[ -f "$xml_file" ]] || continue
+  ip=$(grep -o '<IP>[^<]*</IP>' "$xml_file" | sed 's/<[^>]*>//g')
   if [[ -n "$ip" ]]; then
     DISCOVERED_IPS+=("$ip")
   fi
-done < <(grep -o '<IP>[^<]*</IP>' "$DISCOVERY_OUTPUT" || true)
+done
 
 if [[ ${#DISCOVERED_IPS[@]} -eq 0 ]]; then
   echo "[!] No SNMP devices found in range."
@@ -147,16 +142,18 @@ for ip in "${DISCOVERED_IPS[@]}"; do
   COUNT=$((COUNT + 1))
   echo "[$COUNT/$TOTAL] Inventory $ip..."
 
-  INV_OUTPUT=$(mktemp /tmp/crm-netinv-"$ip"-XXXXXX.xml)
+  INV_DIR=$(mktemp -d /tmp/crm-netinv-"$ip"-XXXXXX)
 
   if "$NETINVENTORY" --host "$ip" \
-       --credentials "$CREDENTIALS" \
-       --output "$INV_OUTPUT" 2>&1; then
+       --community "$COMMUNITY" \
+       --save "$INV_DIR" 2>&1; then
     echo "    OK"
-    INVENTORY_FILES+=("$INV_OUTPUT")
+    for f in "$INV_DIR"/netinventory/*.xml; do
+      [[ -f "$f" ]] && INVENTORY_FILES+=("$f")
+    done
   else
     echo "    Error - skipping"
-    rm -f "$INV_OUTPUT"
+    rm -rf "$INV_DIR"
   fi
 done
 
@@ -219,7 +216,7 @@ fi
 
 echo ""
 echo "[*] Results saved at:"
-echo "    Discovery: $DISCOVERY_OUTPUT"
+echo "    Discovery: $DISCOVERY_DIR/netdiscovery/"
 for f in "${INVENTORY_FILES[@]}"; do
   echo "    $f"
 done
@@ -237,5 +234,5 @@ echo "============================================"
 
 echo ""
 echo "[*] To inject directly into GLPI server:"
-echo "    glpi-injector -f \"$DISCOVERY_OUTPUT\" --url https://glpi.company.com/front/inventory.php"
+echo "    glpi-injector -f \"$DISCOVERY_DIR/netdiscovery/\" --url https://glpi.company.com/front/inventory.php"
 echo ""

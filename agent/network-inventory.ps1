@@ -5,8 +5,12 @@
   Calls official GLPI Agent tools to scan network and collect inventory
   of network devices (switch, router, firewall, AP...).
 
-  Auto-installs GLPI Agent if not found (Windows: winget/MSI)
-  On Linux/macOS: run with native package manager before this script.
+  Auto-installs GLPI Agent if not found (Windows: winget/MSI/portable ZIP).
+  Auto-downloads missing Perl modules (NetDiscovery/NetInventory/SNMP) from
+  the GLPI Agent GitHub repo if the Windows package lacks them.
+
+  On Linux/macOS: install glpi-agent via package manager before running
+  the companion .sh wrapper.
 
 .PARAMETER FirstIP
   First IP of subnet to scan (e.g. "192.168.1.1")
@@ -50,7 +54,13 @@ function Find-GLPIDir {
     $where = where.exe "glpi-agent" 2>$null
     if ($where) { $agentPath = $where[0] }
   }
-  if ($agentPath) { return (Get-Item $agentPath).DirectoryName }
+  if ($agentPath) {
+    # glpi-agent.bat wrapper -> up one level
+    if ($agentPath -match 'glpi-agent\.bat$') {
+      return (Get-Item $agentPath).DirectoryName
+    }
+    return (Get-Item $agentPath).DirectoryName
+  }
   # Search common install locations
   $searches = @(
     "$env:ProgramFiles\GLPI-Agent",
@@ -76,39 +86,122 @@ function Find-Command {
   # Method 3: Search in GLPI Agent install directory
   $glpiDir = Find-GLPIDir
   if ($glpiDir) {
-    Write-Host "    [debug] GLPI-Agent root: $glpiDir" -ForegroundColor DarkGray
-    # List directory structure (first level)
-    Write-Host "    [debug] Subdirs:" -ForegroundColor DarkGray
-    Get-ChildItem -Path $glpiDir -Directory -ErrorAction SilentlyContinue | ForEach-Object {
-      Write-Host "      $($_.Name)" -ForegroundColor DarkGray
-    }
-    # Search recursively in the whole GLPI-Agent tree for the command
+    # Search for exact name (no extension assumed for Perl scripts)
+    $found = Get-ChildItem -Path $glpiDir -Recurse -ErrorAction SilentlyContinue |
+      Where-Object { -not $_.PSIsContainer -and $_.Name -eq $Name }
+    if ($found) { return $found[0].FullName }
+    # Wildcard search
     $found = Get-ChildItem -Path $glpiDir -Filter "$Name*" -Recurse -ErrorAction SilentlyContinue |
       Where-Object { -not $_.PSIsContainer } |
       Select-Object -First 1
     if ($found) { return $found.FullName }
-    # Partial name fallback
-    $partial = $Name -replace "glpi-", ""
-    $found = Get-ChildItem -Path $glpiDir -Filter "*$partial*" -Recurse -ErrorAction SilentlyContinue |
-      Where-Object { -not $_.PSIsContainer } |
-      Select-Object -First 1
-    if ($found) { return $found.FullName }
-    # Debug: show ALL .exe in GLPI-Agent tree
-    Write-Host "    [debug] All .exe/.bat files in GLPI-Agent:" -ForegroundColor DarkGray
-    Get-ChildItem -Path $glpiDir -Include "*.exe","*.bat","*.pl" -Recurse -ErrorAction SilentlyContinue | ForEach-Object {
-      Write-Host "      $($_.FullName)" -ForegroundColor DarkGray
-    }
   }
   return $null
 }
 
-# ─── Refresh PATH from registry (reload after install) ──────
+# ─── Force-reload PATH from registry ─────────────────────────
 function Update-SessionPath {
-  # Reload machine PATH from registry
   $machinePath = [Environment]::GetEnvironmentVariable("Path", [EnvironmentVariableTarget]::Machine)
   $userPath = [Environment]::GetEnvironmentVariable("Path", [EnvironmentVariableTarget]::User)
   if ($machinePath) { $env:Path = "$machinePath;$env:Path" }
   if ($userPath) { $env:Path = "$userPath;$env:Path" }
+}
+
+# ─── Download missing GLPI Agent modules from GitHub ─────────
+function Install-MissingNetworkModules {
+  param([string]$GlpiDir)
+  Write-Host ""
+  Write-Host "[*] GLPI Agent found at: $GlpiDir" -ForegroundColor Cyan
+  Write-Host "[*] Downloading missing network modules (NetDiscovery/NetInventory/SNMP)..." -ForegroundColor Yellow
+
+  $repoUrl = "https://github.com/glpi-project/glpi-agent/archive/develop.zip"
+  $zipPath = "$env:TEMP\glpi-agent-src-$(Get-Random).zip"
+  $extractPath = "$env:TEMP\glpi-agent-src-$(Get-Random)"
+
+  try {
+    Write-Host "    Downloading source from GitHub (develop branch)..." -ForegroundColor Gray
+    Invoke-WebRequest -Uri $repoUrl -OutFile $zipPath -TimeoutSec 120 -ErrorAction Stop
+    Write-Host "    Extracting..." -ForegroundColor Gray
+    Expand-Archive -Path $zipPath -DestinationPath $extractPath -Force -ErrorAction Stop
+    Remove-Item $zipPath -Force -ErrorAction SilentlyContinue
+
+    $srcRoot = Get-ChildItem -Path $extractPath -Directory | Select-Object -First 1
+    if (-not $srcRoot) {
+      Write-Host "    [!] Unexpected ZIP structure." -ForegroundColor Red
+      return $false
+    }
+    $srcRoot = $srcRoot.FullName
+
+    # Files to install: source path -> destination (relative to GLPI Agent)
+    $fileMap = @(
+      # Bin scripts -> perl\bin
+      @{src="bin\glpi-netdiscovery";       dst="perl\bin\glpi-netdiscovery"}
+      @{src="bin\glpi-netinventory";       dst="perl\bin\glpi-netinventory"}
+
+      # Task modules -> perl\agent
+      @{src="lib\GLPI\Agent\Task\NetDiscovery.pm";              dst="perl\agent\GLPI\Agent\Task\NetDiscovery.pm"}
+      @{src="lib\GLPI\Agent\Task\NetDiscovery\Job.pm";          dst="perl\agent\GLPI\Agent\Task\NetDiscovery\Job.pm"}
+      @{src="lib\GLPI\Agent\Task\NetDiscovery\Version.pm";      dst="perl\agent\GLPI\Agent\Task\NetDiscovery\Version.pm"}
+      @{src="lib\GLPI\Agent\Task\NetInventory.pm";              dst="perl\agent\GLPI\Agent\Task\NetInventory.pm"}
+      @{src="lib\GLPI\Agent\Task\NetInventory\Job.pm";          dst="perl\agent\GLPI\Agent\Task\NetInventory\Job.pm"}
+      @{src="lib\GLPI\Agent\Task\NetInventory\Version.pm";      dst="perl\agent\GLPI\Agent\Task\NetInventory\Version.pm"}
+
+      # Tool modules -> perl\agent
+      @{src="lib\GLPI\Agent\Tools\SNMP.pm";                     dst="perl\agent\GLPI\Agent\Tools\SNMP.pm"}
+      @{src="lib\GLPI\Agent\Tools\Expiration.pm";               dst="perl\agent\GLPI\Agent\Tools\Expiration.pm"}
+
+      # SNMP base modules -> perl\agent
+      @{src="lib\GLPI\Agent\SNMP.pm";                          dst="perl\agent\GLPI\Agent\SNMP.pm"}
+      @{src="lib\GLPI\Agent\SNMP\Device.pm";                   dst="perl\agent\GLPI\Agent\SNMP\Device.pm"}
+      @{src="lib\GLPI\Agent\SNMP\Device\Components.pm";        dst="perl\agent\GLPI\Agent\SNMP\Device\Components.pm"}
+      @{src="lib\GLPI\Agent\SNMP\Hardware.pm";                 dst="perl\agent\GLPI\Agent\SNMP\Hardware.pm"}
+      @{src="lib\GLPI\Agent\SNMP\Hardware\Brocade.pm";         dst="perl\agent\GLPI\Agent\SNMP\Hardware\Brocade.pm"}
+      @{src="lib\GLPI\Agent\SNMP\Hardware\Qlogic.pm";          dst="perl\agent\GLPI\Agent\SNMP\Hardware\Qlogic.pm"}
+      @{src="lib\GLPI\Agent\SNMP\Live.pm";                     dst="perl\agent\GLPI\Agent\SNMP\Live.pm"}
+      @{src="lib\GLPI\Agent\SNMP\Mock.pm";                     dst="perl\agent\GLPI\Agent\SNMP\Mock.pm"}
+      @{src="lib\GLPI\Agent\SNMP\MibSupport.pm";               dst="perl\agent\GLPI\Agent\SNMP\MibSupport.pm"}
+      @{src="lib\GLPI\Agent\SNMP\Security\USM.pm";             dst="perl\agent\GLPI\Agent\SNMP\Security\USM.pm"}
+    )
+
+    # MIB Support vendor files - collect all
+    $mibFiles = Get-ChildItem -Path "$srcRoot\lib\GLPI\Agent\SNMP\MibSupport" -Filter "*.pm" -ErrorAction SilentlyContinue
+    foreach ($mibFile in $mibFiles) {
+      $fileMap += @{src="lib\GLPI\Agent\SNMP\MibSupport\$($mibFile.Name)"; dst="perl\agent\GLPI\Agent\SNMP\MibSupport\$($mibFile.Name)"}
+    }
+
+    $installed = 0
+    $errors = 0
+    foreach ($entry in $fileMap) {
+      $srcFile = Join-Path $srcRoot $entry.src
+      $dstFile = Join-Path $GlpiDir $entry.dst
+      if (-not (Test-Path $srcFile)) {
+        # Some MIB files are .pm w/o extension? Check all files in MibSupport dir
+        continue
+      }
+      $dstDir = Split-Path $dstFile -Parent
+      if (-not (Test-Path $dstDir)) {
+        New-Item -ItemType Directory -Path $dstDir -Force -ErrorAction SilentlyContinue | Out-Null
+      }
+      try {
+        Copy-Item -Path $srcFile -Destination $dstFile -Force -ErrorAction Stop
+        $installed++
+      } catch {
+        Write-Host "    [!] Failed to copy $($entry.dst): $_" -ForegroundColor DarkYellow
+        $errors++
+      }
+    }
+
+    # Clean up
+    Remove-Item -Path $extractPath -Recurse -Force -ErrorAction SilentlyContinue
+
+    Write-Host "    Installed $installed files ($errors errors)." -ForegroundColor Gray
+    return ($installed -gt 0)
+  } catch {
+    Write-Host "    [!] Failed to download/extract: $_" -ForegroundColor Red
+    if (Test-Path $zipPath) { Remove-Item $zipPath -Force -ErrorAction SilentlyContinue }
+    if (Test-Path $extractPath) { Remove-Item $extractPath -Recurse -Force -ErrorAction SilentlyContinue }
+    return $false
+  }
 }
 
 Write-Host "============================================" -ForegroundColor Cyan
@@ -116,24 +209,17 @@ Write-Host "  CRM Network Inventory - GLPI Agent" -ForegroundColor Cyan
 Write-Host "============================================" -ForegroundColor Cyan
 Write-Host ""
 
-# ─── GLPI Agent version ─────────────────────────────────────
+# ─── GLPI Agent version (for installer) ─────────────────────
 $GLPI_VERSION = "1.18"
 
 # ─── Check / Install GLPI Agent ─────────────────────────────
 function Install-GLPI-Agent {
   Write-Host "[*] GLPI Agent not found. Attempting auto-install..." -ForegroundColor Yellow
 
-  # After any method, refresh PATH and search for binaries
   function Test-InstallSuccess {
     Update-SessionPath
-    $foundDiscovery = Find-Command "glpi-netdiscovery"
-    $foundInventory = Find-Command "glpi-netinventory"
-    if ($foundDiscovery -and $foundInventory) {
-      $script:netdiscovery = $foundDiscovery
-      $script:netinventory = $foundInventory
-      return $true
-    }
-    return $false
+    $script:glpiDir = Find-GLPIDir
+    return ($null -ne $script:glpiDir)
   }
 
   # Method 1: winget
@@ -141,14 +227,11 @@ function Install-GLPI-Agent {
   if ($winget) {
     Write-Host "    Checking winget for GLPI Agent..." -ForegroundColor Gray
     $null = & winget install "glpi-agent" --accept-package-agreements --silent 2>&1
-    $exitCode = $LASTEXITCODE
-    # winget returns non-zero if already installed with no upgrade available
-    # That's OK - it means the package IS installed
     if (Test-InstallSuccess) {
       Write-Host "[OK] GLPI Agent found (via winget)." -ForegroundColor Green
       return $true
     }
-    Write-Host "    winget done (code: $exitCode). Binaries not found yet. Trying next..." -ForegroundColor DarkYellow
+    Write-Host "    winget done. Binaries not found yet." -ForegroundColor DarkYellow
   }
 
   # Method 2: Download MSI and install silently (needs admin)
@@ -182,7 +265,6 @@ function Install-GLPI-Agent {
     Invoke-WebRequest -Uri $zipUrl -OutFile $zipPath -TimeoutSec 60 -ErrorAction Stop
     Expand-Archive -Path $zipPath -DestinationPath $extractPath -Force -ErrorAction Stop
     Remove-Item $zipPath -Force -ErrorAction SilentlyContinue
-    # Add bin dirs to PATH for this session
     $binPaths = @(
       "$extractPath\GLPI-Agent\bin",
       "$extractPath\GLPI-Agent\perl\bin",
@@ -204,11 +286,10 @@ function Install-GLPI-Agent {
   return $false
 }
 
-# Check and auto-install
-$netdiscovery = Find-Command "glpi-netdiscovery"
-$netinventory = Find-Command "glpi-netinventory"
+# ─── Find GLPI Agent ─────────────────────────────────────────
+$glpiDir = Find-GLPIDir
 
-if (-not $netdiscovery -or -not $netinventory) {
+if (-not $glpiDir) {
   $shouldInstall = $AutoInstall
   if (-not $shouldInstall) {
     Write-Host "[?] GLPI Agent not found. Install automatically? (Y/N)" -ForegroundColor Yellow
@@ -219,13 +300,11 @@ if (-not $netdiscovery -or -not $netinventory) {
   if ($shouldInstall) {
     $installed = Install-GLPI-Agent
     if ($installed) {
-      # Re-check after install
-      $netdiscovery = Find-Command "glpi-netdiscovery"
-      $netinventory = Find-Command "glpi-netinventory"
+      $glpiDir = Find-GLPIDir
     }
   }
 
-  if (-not $netdiscovery -or -not $netinventory) {
+  if (-not $glpiDir) {
     Write-Host "[!] GLPI Agent still not available." -ForegroundColor Red
     Write-Host "    Install manually:" -ForegroundColor Yellow
     Write-Host "      winget install glpi-agent" -ForegroundColor Yellow
@@ -235,81 +314,171 @@ if (-not $netdiscovery -or -not $netinventory) {
   }
 }
 
-Write-Host "[OK] glpi-netdiscovery: $netdiscovery" -ForegroundColor Green
-Write-Host "[OK] glpi-netinventory: $netinventory" -ForegroundColor Green
-Write-Host ""
+Write-Host "[OK] GLPI Agent directory: $glpiDir" -ForegroundColor Green
 
-# ─── Step 1: Network Discovery ───────────────────────────────
-Write-Host "[*] Step 1: Network Discovery ($FirstIP -> $LastIP)..." -ForegroundColor Gray
-Write-Host "    Credentials: $Credentials" -ForegroundColor Gray
-
-$discoveryOutput = "$env:TEMP\crm-netdiscovery-$(Get-Random).xml"
-try {
-  & $netdiscovery --first $FirstIP --last $LastIP --credentials $Credentials --output $discoveryOutput 2>&1
-  if (-not (Test-Path $discoveryOutput)) {
-    Write-Host "[!] Discovery found no devices." -ForegroundColor Yellow
-    exit 0
-  }
-} catch {
-  Write-Host "[!] Discovery error: $_" -ForegroundColor Red
+# ─── GLPI Agent Perl interpreter ────────────────────────────
+$perlExe = Join-Path $glpiDir "perl\bin\glpi-agent.exe"
+if (-not (Test-Path $perlExe)) {
+  Write-Host "[!] Perl interpreter not found at $perlExe" -ForegroundColor Red
   exit 1
 }
+$perlAgentDir = Join-Path $glpiDir "perl\agent"
 
-Write-Host "[OK] Discovery complete." -ForegroundColor Green
+# ─── Check / Install missing modules ────────────────────────
+$netdiscoveryScript = Join-Path $glpiDir "perl\bin\glpi-netdiscovery"
+$netinventoryScript = Join-Path $glpiDir "perl\bin\glpi-netinventory"
+$netDiscoveryModule = Join-Path $perlAgentDir "GLPI\Agent\Task\NetDiscovery.pm"
 
-# ─── Read IP list from discovery output ──────────────────────
-$discoveryContent = Get-Content $discoveryOutput -Raw
-$discoveredIPs = @()
-if ($discoveryContent -match '<IP>([^<]+)</IP>') {
-  $discoveredIPs = [regex]::Matches($discoveryContent, '<IP>([^<]+)</IP>') | ForEach-Object { $_.Groups[1].Value }
-}
+if (-not (Test-Path $netdiscoveryScript) -or -not (Test-Path $netDiscoveryModule)) {
+  Write-Host "[*] Network modules not found in GLPI Agent installation." -ForegroundColor Yellow
+  Write-Host "    The Windows GLPI Agent package does not include NetDiscovery/NetInventory." -ForegroundColor Gray
+  Write-Host "    Downloading missing modules from GLPI Agent GitHub..." -ForegroundColor Gray
+  $modulesOk = Install-MissingNetworkModules -GlpiDir $glpiDir
+  if (-not $modulesOk) {
+    Write-Host "[!] Failed to install network modules." -ForegroundColor Red
+    Write-Host "    Falling back to ping-based discovery only." -ForegroundColor DarkYellow
 
-if ($discoveredIPs.Count -eq 0) {
-  Write-Host "[!] No SNMP devices found in range." -ForegroundColor Yellow
-  Remove-Item $discoveryOutput -Force -ErrorAction SilentlyContinue
-  exit 0
-}
-
-Write-Host "[OK] Found $($discoveredIPs.Count) devices:" -ForegroundColor Green
-$discoveredIPs | ForEach-Object { Write-Host "    $_" -ForegroundColor White }
-Write-Host ""
-
-# ─── Step 2: Network Inventory each device ──────────────────
-$allDevices = @()
-$count = 0
-$total = $discoveredIPs.Count
-
-foreach ($ip in $discoveredIPs) {
-  $count++
-  Write-Host "[$count/$total] Inventory $ip..." -ForegroundColor Gray
-
-  $invOutput = "$env:TEMP\crm-netinv-$ip-$(Get-Random).xml"
-  try {
-    & $netinventory --host $ip --credentials $Credentials --output $invOutput 2>&1
-    if (Test-Path $invOutput) {
-      $content = Get-Content $invOutput -Raw
-      if ($content.Trim().Length -gt 0) {
-        Write-Host "    OK" -ForegroundColor Green
+    # Fallback: use simple ping sweep + manual SNMP
+    Write-Host ""
+    Write-Host "[*] Fallback: ping sweep $FirstIP -> $LastIP..." -ForegroundColor Gray
+    $liveIPs = @()
+    $ipParts = $FirstIP -split '\.'
+    $start = [int]$ipParts[3]
+    $endParts = $LastIP -split '\.'
+    $end = [int]$endParts[3]
+    if ($start -gt $end) { $tmp = $start; $start = $end; $end = $tmp }
+    for ($i = $start; $i -le $end; $i++) {
+      $ip = "$($ipParts[0]).$($ipParts[1]).$($ipParts[2]).$i"
+      if (Test-Connection -ComputerName $ip -Count 1 -Quiet -ErrorAction SilentlyContinue) {
+        Write-Host "    $ip - alive" -ForegroundColor White
+        $liveIPs += $ip
       }
     }
-  } catch {
-    Write-Host "    Error: $_" -ForegroundColor Yellow
+    if ($liveIPs.Count -eq 0) {
+      Write-Host "[!] No live hosts found." -ForegroundColor Yellow
+    } else {
+      Write-Host "[OK] Found $($liveIPs.Count) live hosts." -ForegroundColor Green
+    }
+    $discoveredIPs = $liveIPs
   }
 }
 
-Write-Host ""
-Write-Host "[OK] Inventory complete." -ForegroundColor Green
+# Re-check after install
+$hasNetdiscovery = Test-Path $netdiscoveryScript
+$hasNetinventory = Test-Path $netinventoryScript
+$hasNetDiscoveryModule = Test-Path $netDiscoveryModule
 
-# ─── Step 3: Build JSON and send to CRM ─────────────────────
-# Results are XML files from GLPI Agent.
-# Use glpi-injector to send to GLPI server, or submit via CRM API.
+if ($hasNetdiscovery -and $hasNetDiscoveryModule) {
+  Write-Host "[OK] glpi-netdiscovery: $netdiscoveryScript" -ForegroundColor Green
+  Write-Host "[OK] glpi-netinventory: $netinventoryScript" -ForegroundColor Green
+  Write-Host ""
 
-Write-Host "[*] Results saved at:" -ForegroundColor Gray
-Write-Host "    Discovery: $discoveryOutput" -ForegroundColor White
-Write-Host "    XML files in: $env:TEMP\crm-netinv-*" -ForegroundColor White
+  # ─── Step 1: Network Discovery ─────────────────────────────
+  Write-Host "[*] Step 1: Network Discovery ($FirstIP -> $LastIP)..." -ForegroundColor Gray
+  Write-Host "    Credentials: $Credentials" -ForegroundColor Gray
 
-# Send discovery result to CRM API (GLPI netinventory format)
-if ($CrmUrl) {
+  $discoveryDir = "$env:TEMP\crm-netdiscovery-$(Get-Random)"
+  New-Item -ItemType Directory -Path $discoveryDir -Force -ErrorAction SilentlyContinue | Out-Null
+
+  try {
+    # Parse credentials into --community for glpi-netdiscovery
+    # Format: "version:2c,community:public" or "version:3,username:foo,authpassword:bar"
+    $discoveryArgs = @(
+      "--first", $FirstIP,
+      "--last", $LastIP,
+      "--save", $discoveryDir
+    )
+    if ($Credentials -match 'community:(\S+)') {
+      $community = $matches[1]
+      $discoveryArgs += "--community", $community
+    }
+    if ($Credentials -match 'version:(\S+)') {
+      $version = $matches[1]
+      if ($version -eq "1") { $discoveryArgs += "--v1" }
+    }
+    # Default to v2c
+    if ($discoveryArgs -notcontains "--v1") {
+      $discoveryArgs += "--v2c"
+    }
+
+    Write-Host "    Running: glpi-netdiscovery --first $FirstIP --last $LastIP --save $discoveryDir" -ForegroundColor DarkGray
+    & $perlExe "-I$perlAgentDir" $netdiscoveryScript @discoveryArgs 2>&1
+
+    # Collect XML results
+    $xmlFiles = Get-ChildItem -Path $discoveryDir -Filter "*.xml" -ErrorAction SilentlyContinue
+    if ($xmlFiles.Count -eq 0) {
+      Write-Host "[!] Discovery found no devices." -ForegroundColor Yellow
+    } else {
+      Write-Host "[OK] Discovery complete. Found $($xmlFiles.Count) device(s)." -ForegroundColor Green
+    }
+  } catch {
+    Write-Host "[!] Discovery error: $_" -ForegroundColor Red
+  }
+
+  # ─── Extract IPs from discovery XML ───────────────────────
+  $discoveredIPs = @()
+  foreach ($xmlFile in $xmlFiles) {
+    $content = Get-Content $xmlFile.FullName -Raw -ErrorAction SilentlyContinue
+    if ($content -match '<DEVICE>') {
+      if ($content -match '<IP>([^<]+)</IP>') {
+        $ip = $matches[1]
+        if ($ip -and -not ($discoveredIPs -contains $ip)) {
+          $discoveredIPs += $ip
+        }
+      }
+    }
+  }
+
+  Write-Host ""
+  if ($discoveredIPs.Count -gt 0) {
+    Write-Host "[OK] Discovered $($discoveredIPs.Count) device(s):" -ForegroundColor Green
+    $discoveredIPs | ForEach-Object { Write-Host "    $_" -ForegroundColor White }
+  }
+
+  # ─── Step 2: Network Inventory ────────────────────────────
+  if ($hasNetinventory -and $discoveredIPs.Count -gt 0) {
+    Write-Host ""
+    Write-Host "[*] Step 2: Inventory each device..." -ForegroundColor Gray
+    $inventoryDir = "$env:TEMP\crm-netinventory-$(Get-Random)"
+    New-Item -ItemType Directory -Path $inventoryDir -Force -ErrorAction SilentlyContinue | Out-Null
+
+    $count = 0
+    $total = $discoveredIPs.Count
+    foreach ($ip in $discoveredIPs) {
+      $count++
+      Write-Host "[$count/$total] Inventory $ip..." -ForegroundColor Gray
+      try {
+        $invArgs = @("--host", $ip, "--save", $inventoryDir)
+        if ($Credentials -match 'community:(\S+)') {
+          $invArgs += "--community", $matches[1]
+        }
+        & $perlExe "-I$perlAgentDir" $netinventoryScript @invArgs 2>&1
+        Write-Host "    OK" -ForegroundColor Green
+      } catch {
+        Write-Host "    Error: $_" -ForegroundColor Yellow
+      }
+    }
+    Write-Host ""
+    Write-Host "[OK] Inventory complete." -ForegroundColor Green
+
+    # Collect inventory XML
+    $invXmlFiles = Get-ChildItem -Path $inventoryDir -Filter "*.xml" -ErrorAction SilentlyContinue
+  }
+
+  # ─── Step 3: Build JSON and send to CRM ───────────────────
+  Write-Host ""
+  Write-Host "[*] Results:" -ForegroundColor Gray
+  Write-Host "    Discovery XML: $discoveryDir" -ForegroundColor White
+  Write-Host "    Inventory XML: $($discoveryDir -replace '-netdiscovery-', '-netinventory-')" -ForegroundColor White
+} else {
+  # Modules not available; rely on fallback data from above
+}
+
+# ─── Fallback / combined result ─────────────────────────────
+if (-not $discoveredIPs) { $discoveredIPs = @() }
+
+# Send to CRM
+if ($CrmUrl -and $discoveredIPs.Count -gt 0) {
   Write-Host ""
   Write-Host "[*] Sending results to CRM..." -ForegroundColor Gray
 
@@ -343,11 +512,16 @@ if ($CrmUrl) {
   }
 }
 
-Write-Host ""
-Write-Host "[*] To inject directly into GLPI server:" -ForegroundColor Gray
-Write-Host "    glpi-injector -f `"$discoveryOutput`" --url https://glpi.company.com/front/inventory.php" -ForegroundColor White
-Write-Host ""
+if ($OutputFile -and $discoveredIPs.Count -gt 0) {
+  $outputDir = Split-Path $OutputFile -Parent
+  if ($outputDir -and -not (Test-Path $outputDir)) {
+    New-Item -ItemType Directory -Path $outputDir -Force | Out-Null
+  }
+  $payload | ConvertTo-Json -Depth 5 | Out-File -FilePath $OutputFile -Encoding utf8
+  Write-Host "[OK] Results saved to $OutputFile" -ForegroundColor Green
+}
 
+Write-Host ""
 Write-Host "============================================" -ForegroundColor Cyan
 Write-Host "  DONE" -ForegroundColor Cyan
 Write-Host "============================================" -ForegroundColor Cyan
