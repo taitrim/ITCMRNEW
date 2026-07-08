@@ -478,10 +478,8 @@ if ($hasNetdiscovery -and $hasNetDiscoveryModule) {
 if (-not $discoveredIPs) { $discoveredIPs = @() }
 
 # Send to CRM
-if ($CrmUrl -and $discoveredIPs.Count -gt 0) {
-  Write-Host ""
-  Write-Host "[*] Sending results to CRM..." -ForegroundColor Gray
-
+# ─── Build payload (used for both CRM send and file export) ─
+if ($discoveredIPs.Count -gt 0) {
   $payload = @{
     action = "netinventory"
     deviceid = "GLPI-AGENT-SCAN-$(Get-Date -Format 'yyyyMMdd-HHmmss')"
@@ -498,27 +496,31 @@ if ($CrmUrl -and $discoveredIPs.Count -gt 0) {
     }
   }
 
-  try {
-    $jsonBody = $payload | ConvertTo-Json -Depth 5
-    $response = Invoke-RestMethod -Uri $CrmUrl -Method Post -Body $jsonBody -ContentType "application/json" -TimeoutSec 120
-    Write-Host "[OK] Sent successfully!" -ForegroundColor Green
-    if ($response.data) {
-      Write-Host "    Submission ID: $($response.data.submissionId)" -ForegroundColor White
-      Write-Host "    Devices: $($response.data.deviceCount)" -ForegroundColor White
+  if ($CrmUrl) {
+    Write-Host ""
+    Write-Host "[*] Sending results to CRM..." -ForegroundColor Gray
+    try {
+      $jsonBody = $payload | ConvertTo-Json -Depth 5
+      $response = Invoke-RestMethod -Uri $CrmUrl -Method Post -Body $jsonBody -ContentType "application/json" -TimeoutSec 120
+      Write-Host "[OK] Sent successfully!" -ForegroundColor Green
+      if ($response.data) {
+        Write-Host "    Submission ID: $($response.data.submissionId)" -ForegroundColor White
+        Write-Host "    Devices: $($response.data.deviceCount)" -ForegroundColor White
+      }
+    } catch {
+      Write-Host "[!] Error sending to CRM: $_" -ForegroundColor Red
+      Write-Host "    XML files preserved. Can inject manually." -ForegroundColor Yellow
     }
-  } catch {
-    Write-Host "[!] Error sending to CRM: $_" -ForegroundColor Red
-    Write-Host "    XML files preserved. Can inject manually." -ForegroundColor Yellow
   }
-}
 
-if ($OutputFile -and $discoveredIPs.Count -gt 0) {
-  $outputDir = Split-Path $OutputFile -Parent
-  if ($outputDir -and -not (Test-Path $outputDir)) {
-    New-Item -ItemType Directory -Path $outputDir -Force | Out-Null
+  if ($OutputFile) {
+    $outputDir = Split-Path $OutputFile -Parent
+    if ($outputDir -and -not (Test-Path $outputDir)) {
+      New-Item -ItemType Directory -Path $outputDir -Force | Out-Null
+    }
+    $payload | ConvertTo-Json -Depth 5 | Out-File -FilePath $OutputFile -Encoding utf8
+    Write-Host "[OK] Results saved to $OutputFile" -ForegroundColor Green
   }
-  $payload | ConvertTo-Json -Depth 5 | Out-File -FilePath $OutputFile -Encoding utf8
-  Write-Host "[OK] Results saved to $OutputFile" -ForegroundColor Green
 }
 
 Write-Host ""
