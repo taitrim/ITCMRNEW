@@ -42,19 +42,30 @@ param(
 # ─── Helper: find command ────────────────────────────────────
 function Find-Command {
   param([string]$Name)
+  # Check PATH first
   $result = Get-Command $Name -ErrorAction SilentlyContinue
   if ($result) { return $result.Source }
-  $paths = @(
-    "$env:ProgramFiles\GLPI-Agent\bin\$Name",
-    "${env:ProgramFiles(x86)}\GLPI-Agent\bin\$Name",
-    "$env:LOCALAPPDATA\GLPI-Agent\bin\$Name"
+  # Search common GLPI Agent install locations
+  $searchRoots = @(
+    "$env:ProgramFiles",
+    "${env:ProgramFiles(x86)}",
+    "$env:LOCALAPPDATA",
+    "$env:ProgramData"
   )
-  foreach ($p in $paths) {
-    if (Test-Path $p) { return $p }
-    if (Test-Path "$p.exe") { return "$p.exe" }
-    if (Test-Path "$p.bat") { return "$p.bat" }
+  foreach ($root in $searchRoots) {
+    $match = Get-ChildItem -Path $root -Filter "$Name*" -Recurse -Depth 4 -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($match) { return $match.FullName }
   }
   return $null
+}
+
+# ─── Refresh PATH from registry (reload after install) ──────
+function Update-SessionPath {
+  # Reload machine PATH from registry
+  $machinePath = [Environment]::GetEnvironmentVariable("Path", [EnvironmentVariableTarget]::Machine)
+  $userPath = [Environment]::GetEnvironmentVariable("Path", [EnvironmentVariableTarget]::User)
+  if ($machinePath) { $env:Path = "$machinePath;$env:Path" }
+  if ($userPath) { $env:Path = "$userPath;$env:Path" }
 }
 
 Write-Host "============================================" -ForegroundColor Cyan
@@ -69,16 +80,29 @@ $GLPI_VERSION = "1.18"
 function Install-GLPI-Agent {
   Write-Host "[*] GLPI Agent not found. Attempting auto-install..." -ForegroundColor Yellow
 
+  # After any method, refresh PATH and search for binaries
+  function Test-InstallSuccess {
+    Update-SessionPath
+    $foundDiscovery = Find-Command "glpi-netdiscovery"
+    $foundInventory = Find-Command "glpi-netinventory"
+    if ($foundDiscovery -and $foundInventory) {
+      $script:netdiscovery = $foundDiscovery
+      $script:netinventory = $foundInventory
+      return $true
+    }
+    return $false
+  }
+
   # Method 1: winget
   $winget = Get-Command "winget" -ErrorAction SilentlyContinue
   if ($winget) {
     Write-Host "    Trying winget install glpi-agent..." -ForegroundColor Gray
-    $result = & winget install "GLPI-Agent" --accept-package-agreements --silent 2>&1
-    if ($LASTEXITCODE -eq 0) {
+    $null = & winget install "GLPI-Agent" --accept-package-agreements --silent 2>&1
+    if (Test-InstallSuccess) {
       Write-Host "[OK] Installed via winget." -ForegroundColor Green
       return $true
     }
-    Write-Host "    winget failed (code: $LASTEXITCODE). Trying next method..." -ForegroundColor DarkYellow
+    Write-Host "    winget done, but binaries not found. Trying next..." -ForegroundColor DarkYellow
   }
 
   # Method 2: Download MSI and install silently (needs admin)
@@ -92,14 +116,15 @@ function Install-GLPI-Agent {
       Write-Host "    Installing MSI silently..." -ForegroundColor Gray
       Start-Process msiexec.exe -ArgumentList "/i `"$msiPath`" /quiet /norestart" -Wait -NoNewWindow
       Remove-Item $msiPath -Force -ErrorAction SilentlyContinue
-      Write-Host "[OK] Installed via MSI." -ForegroundColor Green
-      return $true
+      if (Test-InstallSuccess) {
+        Write-Host "[OK] Installed via MSI." -ForegroundColor Green
+        return $true
+      }
     } catch {
-      Write-Host "    MSI download or install failed: $_" -ForegroundColor DarkYellow
+      Write-Host "    MSI failed: $_" -ForegroundColor DarkYellow
     }
   } else {
     Write-Host "    MSI install requires Administrator privileges." -ForegroundColor DarkYellow
-    Write-Host "    Right-click the script and select 'Run as Administrator'." -ForegroundColor DarkYellow
   }
 
   # Method 3: Download portable ZIP, extract to temp, use directly
@@ -122,8 +147,10 @@ function Install-GLPI-Agent {
         $env:Path = "$bp;$env:Path"
       }
     }
-    Write-Host "[OK] Extracted portable GLPI Agent." -ForegroundColor Green
-    return $true
+    if (Test-InstallSuccess) {
+      Write-Host "[OK] Extracted portable GLPI Agent." -ForegroundColor Green
+      return $true
+    }
   } catch {
     Write-Host "    Portable ZIP failed: $_" -ForegroundColor DarkYellow
   }
@@ -161,10 +188,6 @@ if (-not $netdiscovery -or -not $netinventory) {
     exit 1
   }
 }
-
-Write-Host "[OK] glpi-netdiscovery: $netdiscovery" -ForegroundColor Green
-Write-Host "[OK] glpi-netinventory: $netinventory" -ForegroundColor Green
-Write-Host ""
 
 Write-Host "[OK] glpi-netdiscovery: $netdiscovery" -ForegroundColor Green
 Write-Host "[OK] glpi-netinventory: $netinventory" -ForegroundColor Green
