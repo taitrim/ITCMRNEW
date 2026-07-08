@@ -27,76 +27,91 @@ function loadScript(filename: string): string {
   throw new Error(`Script not found: ${filename}`);
 }
 
-/** Encode string to base64 for embedding in .bat */
-function toBase64(str: string): string {
-  return Buffer.from(str, "utf-8").toString("base64");
+/** Escape a string for use in batch echo >> file */
+function escapeBatchEcho(text: string): string {
+  return text
+    .replace(/%/g, "%%")
+    .replace(/\^/g, "^^")
+    .replace(/&/g, "^&")
+    .replace(/\|/g, "^|")
+    .replace(/</g, "^<")
+    .replace(/>/g, "^>");
 }
 
 function buildWindowsBat(crmSubmitUrl: string): string {
   const ps1 = loadScript("network-inventory.ps1");
   // Inject CRM URL into PowerShell script
   const ps1Injected = ps1.replace('[string]$CrmUrl = ""', `[string]$CrmUrl = "${crmSubmitUrl}"`);
-  const b64 = toBase64(ps1Injected);
 
-  return `@echo off
-chcp 65001 >nul
-title CRM Network Inventory — GLPI Agent
-cd /d "%~dp0"
+  // Split into lines, escape each, wrap as echo >> batch commands
+  const ps1Lines = ps1Injected.split("\n").map((l) => l.replace(/\r$/, ""));
+  const ps1EchoLines: string[] = [];
+  ps1Lines.forEach((line, i) => {
+    if (i === 0) {
+      ps1EchoLines.push(`echo.${escapeBatchEcho(line)} > "%PS_SCRIPT%"`);
+    } else {
+      ps1EchoLines.push(`echo.${escapeBatchEcho(line)} >> "%PS_SCRIPT%"`);
+    }
+  });
 
-echo ============================================
-echo   CRM Network Inventory — GLPI Agent
-echo   Quet mang SNMP bang GLPI Agent
-echo ============================================
-echo.
+  const lines = [
+    '@echo off',
+    'chcp 65001 >nul',
+    'title CRM Network Inventory — GLPI Agent',
+    'cd /d "%~dp0"',
+    '',
+    'echo ============================================',
+    'echo   CRM Network Inventory — GLPI Agent',
+    'echo   Quet mang SNMP bang GLPI Agent',
+    'echo ============================================',
+    'echo.',
+    '',
+    ':: Kiem tra PowerShell',
+    'where powershell.exe >nul 2>nul',
+    'if %ERRORLEVEL% neq 0 (',
+    '    echo [!] Khong tim thay PowerShell.',
+    '    echo.',
+    '    pause',
+    '    exit /b 1',
+    ')',
+    '',
+    'echo [*] Dang tao script tam...',
+    'set "PS_SCRIPT=%temp%\\crm-network-inventory.ps1"',
+    '',
+    ...ps1EchoLines,
+    '',
+    'if %ERRORLEVEL% neq 0 (',
+    '    echo [!] Khong the tao temp script.',
+    '    echo.',
+    '    pause',
+    '    exit /b 1',
+    ')',
+    '',
+    'echo [*] Dang chay network inventory...',
+    'echo.',
+    '',
+    ':: Chay script (forward arguments %*)',
+    'powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%PS_SCRIPT%" %*',
+    '',
+    'set EXIT_CODE=%ERRORLEVEL%',
+    '',
+    ':: Don dep temp file',
+    'del "%PS_SCRIPT%" 2>nul',
+    '',
+    'echo.',
+    'if %EXIT_CODE% neq 0 (',
+    '    echo [!] Script ket thuc voi loi (code: %EXIT_CODE%^)',
+    ') else (',
+    '    echo [OK] Hoan tat.',
+    ')',
+    '',
+    'echo.',
+    'pause',
+    '',
+  ];
 
-:: Kiem tra PowerShell
-where powershell.exe >nul 2>nul
-if %ERRORLEVEL% neq 0 (
-    echo [!] Khong tim thay PowerShell.
-    echo.
-    pause
-    exit /b 1
-)
-
-echo [*] Dang chuan bi...
-set "PS_SCRIPT=%temp%\\crm-network-inventory.ps1"
-
-:: Giai ma base64 thanh .ps1
-powershell -NoProfile -Command ^
-  "$b='%b64%';" ^
-  "$d=[System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($b));" ^
-  "Out-File -FilePath '%temp%\\crm-network-inventory.ps1' -InputObject $d -Encoding UTF8"
-
-if %ERRORLEVEL% neq 0 (
-    echo [!] Khong the tao temp script.
-    echo.
-    pause
-    exit /b 1
-)
-
-echo [*] Dang chay network inventory...
-echo [*] Can GLPI Agent (Perl) da cai de hoat dong.
-echo [*] Neu chua cai: choco install glpi-agent
-echo.
-
-:: Chay script (forward arguments %*)
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%PS_SCRIPT%" %*
-
-set EXIT_CODE=%ERRORLEVEL%
-
-:: Don dep temp file
-del "%PS_SCRIPT%" 2>nul
-
-echo.
-if %EXIT_CODE% neq 0 (
-    echo [!] Script ket thuc voi loi (code: %EXIT_CODE%^)
-) else (
-    echo [OK] Hoan tat.
-)
-
-echo.
-pause
-`;
+  // Join with \r\n for Windows batch compatibility
+  return lines.join('\r\n');
 }
 
 function buildLinuxScript(crmSubmitUrl: string): string {
