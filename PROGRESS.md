@@ -331,3 +331,46 @@ Every Friday:
 **Verified:**
 - `tsc --noEmit` — 0 errors (trừ pre-existing DeviceComponentsPanel TS2339)
 - `npx playwright test` — 5/5 passed
+
+### 🔴 ITSM-P05 — Network inventory: GLPI Agent Perl module fix
+
+**Status:** done
+**Started:** 2026-07-08
+**Completed:** 2026-07-08
+**Commits:** `6d24ba7` → `15002ea`
+**Model:** Sonnet
+
+**Problem:**
+Windows GLPI Agent MSI/ZIP package does NOT ship `glpi-netdiscovery`,
+`glpi-netinventory`, or the `GLPI::Agent::SNMP::*` Perl modules (~100 files).
+These are Linux-only components. The wrapper script assumed they existed as
+separate .exe/.bat commands and would fail at runtime.
+
+**Investigation findings:**
+- `glpi-netdiscovery`/`glpi-netinventory` are Perl scripts (no extension) stored in
+  `perl\bin\` — absent from Windows package
+- `GLPI::Agent::Task::NetDiscovery`, `NetInventory`, `SNMP::*` modules are all
+  absent from the Windows `perl\agent\` directory
+- `setup.pm` in `perl\lib\` handles `@INC` setup automatically via
+  `use lib abs_path(rel2abs('../../agent', __FILE__))`
+- `Net::SNMP`, `Net::IP`, `Crypt::DES`, `Parallel::ForkManager` ARE present in
+  `perl\vendor\lib\` — all needed dependencies are already shipped
+
+**Fix:**
+- Added `Install-MissingNetworkModules` function to `network-inventory.ps1` that
+  downloads the GLPI Agent GitHub source ZIP (develop branch) and extracts only
+  the missing Perl scripts/modules to the right locations in the GLPI Agent
+  installation directory
+- Runs `glpi-netdiscovery` via `perl\bin\glpi-agent.exe` (the bundled Perl
+  interpreter) — `setup.pm` automatically sets up the module include path
+- Updated `network-inventory.sh` to use `--save` instead of `--output` flag
+  (matches actual GLPI Agent CLI)
+- Updated `.bat` wrapper to use ASCII English text (batch-safe)
+
+**Verified:**
+- Download + install: 102 files extracted to correct locations
+- Module load test: all modules (Target::Local, NetDiscovery, SNMP::Live, etc.)
+  load successfully via the bundled Perl interpreter
+- Typecheck: `tsc --noEmit` — 0 errors
+- Test: `npm test` — 1/1 passed
+- Build: pre-existing `useSearchParams` Suspense error on `/agent-updates` (not related)
