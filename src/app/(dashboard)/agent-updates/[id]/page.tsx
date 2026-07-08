@@ -491,15 +491,16 @@ export default function SubmissionReviewPage({ params }: { params: Promise<{ id:
     if (!reviewData || selected.size === 0) return;
     setSubmitting(true);
     try {
-      const selectedIds = Array.from(selected).map(i =>
-        String(reviewData.devices[i]?.parsed?.deviceId || `${reviewData.devices[i]?.parsed?.name}_${i}`)
-      );
+      // Derive deviceId matching backend logic (serialNumber || name || unique fallback)
+      const deriveId = (d: any, fallbackIdx: number) =>
+        String(d.parsed?.deviceId || d.parsed?.serialNumber || d.parsed?.name || `device_${fallbackIdx}`);
+      const selectedIds = Array.from(selected).map(i => deriveId(reviewData.devices[i], i));
       // Convert index-based assignments to deviceId-based for API
       const deviceAssignments: Record<string, string | null> = {};
       for (const [idx, empId] of Object.entries(assignments)) {
         const dev = reviewData.devices[Number(idx)];
         if (dev) {
-          const devId = String(dev.parsed?.deviceId || `${dev.parsed?.name}_${idx}`);
+          const devId = deriveId(dev, Number(idx));
           deviceAssignments[devId] = empId;
         }
       }
