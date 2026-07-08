@@ -39,36 +39,53 @@ param(
   [switch]$AutoInstall = $false
 )
 
+# ─── Find GLPI Agent installation directory ─────────────────
+function Find-GLPIDir {
+  $searches = @(
+    "$env:ProgramFiles\GLPI-Agent",
+    "${env:ProgramFiles(x86)}\GLPI-Agent",
+    "$env:LOCALAPPDATA\GLPI-Agent",
+    "$env:ProgramData\GLPI-Agent"
+  )
+  foreach ($dir in $searches) {
+    if (Test-Path $dir) { return $dir }
+  }
+  # Search for glpi-agent.exe anywhere in ProgramFiles
+  $match = Get-ChildItem -Path "$env:ProgramFiles" -Filter "glpi-agent.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+  if ($match) { return $match.DirectoryName }
+  $match = Get-ChildItem -Path "${env:ProgramFiles(x86)}" -Filter "glpi-agent.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+  if ($match) { return $match.DirectoryName }
+  return $null
+}
+
 # ─── Helper: find command ────────────────────────────────────
 function Find-Command {
   param([string]$Name)
   # Method 1: Get-Command (PATH check)
   $result = Get-Command $Name -ErrorAction SilentlyContinue
   if ($result) { return $result.Source }
-  # Method 2: where.exe (Windows PATH check, more reliable)
+  # Method 2: where.exe (Windows PATH check)
   $where = where.exe $Name 2>$null
   if ($where) { return $where[0] }
-  # Method 3: Search common install locations (no depth limit)
-  $searchRoots = @(
-    "$env:ProgramFiles",
-    "${env:ProgramFiles(x86)}",
-    "$env:LOCALAPPDATA",
-    "$env:ProgramData",
-    "$env:SystemRoot"
-  )
-  foreach ($root in $searchRoots) {
-    $match = Get-ChildItem -Path $root -Filter "$Name*" -Recurse -ErrorAction SilentlyContinue |
-      Where-Object { -not $_.PSIsContainer } |
-      Select-Object -First 1
-    if ($match) { return $match.FullName }
-  }
-  # Method 4: Search by partial name (*netdiscovery* / *netinventory*)
-  $partialName = $Name -replace "glpi-", ""
-  foreach ($root in $searchRoots) {
-    $match = Get-ChildItem -Path $root -Filter "*$partialName*" -Recurse -ErrorAction SilentlyContinue |
-      Where-Object { -not $_.PSIsContainer } |
-      Select-Object -First 1
-    if ($match) { return $match.FullName }
+  # Method 3: Search in GLPI Agent install directory
+  $glpiDir = Find-GLPIDir
+  if ($glpiDir) {
+    Write-Host "    [debug] GLPI-Agent dir: $glpiDir" -ForegroundColor DarkGray
+    # List all executables in bin dir
+    $binDir = Join-Path $glpiDir "bin"
+    if (Test-Path $binDir) {
+      $files = Get-ChildItem -Path $binDir -Filter "$Name*" -ErrorAction SilentlyContinue
+      if ($files) { return $files[0].FullName }
+      # Try partial match
+      $partial = $Name -replace "glpi-", ""
+      $files = Get-ChildItem -Path $binDir -Filter "*$partial*" -ErrorAction SilentlyContinue
+      if ($files) { return $files[0].FullName }
+      # Debug: show all .exe files
+      Write-Host "    [debug] Files in $binDir :" -ForegroundColor DarkGray
+      Get-ChildItem -Path $binDir -Filter "*.exe" -ErrorAction SilentlyContinue | ForEach-Object {
+        Write-Host "      $($_.Name)" -ForegroundColor DarkGray
+      }
+    }
   }
   return $null
 }
