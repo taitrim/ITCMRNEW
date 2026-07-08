@@ -195,9 +195,8 @@ scan_device() {
     FW=$(echo "$SD_LC" | grep -oP 'version\s+\K[\d.()]+')
   fi
 
-  # Output JSON line
+  # Output JSON line (GLPI netinventory format)
   jq -n -c \
-    --arg type "$TYPE" \
     --arg mfg "$MFG" \
     --arg model "$(echo "$SD" | head -c 80)" \
     --arg serial "$SERIAL" \
@@ -207,9 +206,20 @@ scan_device() {
     --arg desc "$SD" \
     --arg up "$UPTIME_STR" \
     '{
-      type: $type, manufacturer: $mfg, model: $model, serial: $serial,
-      name: $name, ip: $ip, firmware: $fw, sysDescr: $desc, uptime: $up,
-      portCount: 0, ports: []
+      versionclient: "1.0",
+      network_device: {
+        name: $name,
+        manufacturer: $mfg,
+        model: $model,
+        serial: $serial,
+        firmware: $fw,
+        uptime: $up,
+        mac: "",
+        ips: [$ip],
+        type: "Networking"
+      },
+      network_ports: [],
+      firmwares: ($fw | if . != "" then [{ name: "Firmware", version: ., type: "device" }] else [] end)
     }'
 
   rm -f "$OUT"
@@ -237,9 +247,9 @@ for IP in $ALIVE_HOSTS; do
   fi
 done
 
-# ─── Build final JSON ───────────────────────────────────────────
+# ─── Build final JSON (GLPI netinventory format) ────────────────
 FULL_JSON=$(jq -n \
-  --arg action "network_inventory" \
+  --arg action "netinventory" \
   --arg did "SNMP-SCAN-$(date +%Y%m%d-%H%M%S)" \
   --argjson devices "[$DEVICES_JSON]" \
   '{action: $action, deviceid: $did, content: $devices}')

@@ -380,30 +380,58 @@ $scanJobs | Remove-Job -Force -ErrorAction SilentlyContinue
 Write-Host ""
 Write-Host "[OK] Scan hoàn tất! Tìm thấy $($devices.Count) thiết bị mạng." -ForegroundColor Green
 
-# ─── Build output JSON ──────────────────────────────────────────
-$output = @{
-  action = "network_inventory"
-  deviceid = "SNMP-SCAN-$(Get-Date -Format 'yyyyMMdd-HHmmss')"
-  content = ($devices.ToArray() | Sort-Object { $_.type, $_.ip }) | ForEach-Object {
-    $d = $_
-    # Clean ports: bỏ port không tên, sort
-    $cleanPorts = $d.ports | Where-Object { $_.name -and $_.name -ne '' } | Sort-Object { [int]($_.name -replace '\D', '0') }
-    @{
-      type = $d.type
+# ─── Build output JSON (GLPI netinventory format) ──────────────
+$contentArray = ($devices.ToArray() | Sort-Object { $_.type, $_.ip }) | ForEach-Object {
+  $d = $_
+  # Build GLPI network_ports array from device ports
+  $glpiPorts = $d.ports | Where-Object { $_.name -and $_.name -ne '' } | ForEach-Object {
+    $p = $_
+    $speedBps = $p.speed * 1_000_000  # convert Mbps → bps for GLPI format
+    $portObj = @{
+      ifname = $p.name
+      ifdescr = $p.name
+      ifspeed = [long]$speedBps
+      ifstatus = if ($p.status -eq "up") { 1 } else { 2 }
+      ifinternalstatus = if ($p.status -eq "up") { 1 } else { 2 }
+      iftype = 6
+      mtu = 1500
+    }
+    if ($p.mac) { $portObj.mac = $p.mac }
+    if ($p.poe) { $portObj.poe = $true }
+    if ($p.neighbor) { $portObj.connections = @(@{ sysname = $p.neighbor }) }
+    $portObj
+  }
+  # Build GLPI-format content object
+  $contentEntry = @{
+    versionclient = "1.0"
+    network_device = @{
+      name = $d.name
       manufacturer = $d.manufacturer
       model = $d.model
       serial = $d.serial
-      name = $d.name
-      ip = $d.ip
       mac = $d.mac
       firmware = $d.firmware
-      sysDescr = $d.sysDescr
-      sysObjectID = $d.sysObjectID
       uptime = $d.uptime
-      portCount = $d.portCount
-      ports = $cleanPorts
+      type = if ($d.type -eq "network") { "Networking" } else { $d.type }
+      ips = @($d.ip)
     }
+    network_ports = $glpiPorts
   }
+  # Add firmware section if firmware available
+  if ($d.firmware) {
+    $contentEntry.firmwares = @(@{
+      name = if ($d.type -eq "switch" -or $d.type -eq "router") { "IOS" } else { "Firmware" }
+      version = $d.firmware
+      type = "device"
+    })
+  }
+  $contentEntry
+}
+
+$output = @{
+  action = "netinventory"
+  deviceid = "SNMP-SCAN-$(Get-Date -Format 'yyyyMMdd-HHmmss')"
+  content = $contentArray
 }
 
 $json = $output | ConvertTo-Json -Depth 10
