@@ -386,7 +386,8 @@ if ($hasNetdiscovery -and $hasNetDiscoveryModule) {
     $discoveryArgs = @(
       "--first", $FirstIP,
       "--last", $LastIP,
-      "--save", $discoveryDir
+      "--save", $discoveryDir,
+      "--debug"
     )
     if ($Credentials -match 'community:(\S+)') {
       $community = $matches[1]
@@ -401,8 +402,17 @@ if ($hasNetdiscovery -and $hasNetDiscoveryModule) {
       $discoveryArgs += "--v2c"
     }
 
-    Write-Host "    Running: glpi-netdiscovery --first $FirstIP --last $LastIP --save $discoveryDir" -ForegroundColor DarkGray
-    & $perlExe "-I$perlAgentDir" $netdiscoveryScript @discoveryArgs 2>&1
+    Write-Host "    Scanning $FirstIP -> $LastIP (this may take a few minutes)..." -ForegroundColor DarkGray
+    Write-Host "    Output dir: $discoveryDir" -ForegroundColor DarkGray
+
+    # Run discovery: capture stderr (log messages) separately from stdout
+    $discResult = & $perlExe $netdiscoveryScript @discoveryArgs 2>&1
+
+    # Filter out log/info messages from stderr — show only notable warnings
+    $discWarnings = $discResult | Where-Object { $_ -is [string] -and $_ -match "(no mibsupport|warning|error|abort|failed)" }
+    if ($discWarnings) {
+      $discWarnings | ForEach-Object { Write-Host "    [agent] $_" -ForegroundColor DarkYellow }
+    }
 
     # Collect XML results
     $xmlFiles = Get-ChildItem -Path $discoveryDir -Filter "*.xml" -ErrorAction SilentlyContinue
